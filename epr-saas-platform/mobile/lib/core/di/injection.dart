@@ -2,6 +2,14 @@ import 'package:get_it/get_it.dart';
 import '../network/dio_client.dart';
 import '../storage/secure_storage.dart';
 import '../storage/local_storage.dart';
+import '../../features/auth/data/datasources/auth_remote_datasource.dart';
+import '../../features/auth/data/repositories/auth_repository_impl.dart';
+import '../../features/auth/domain/repositories/auth_repository.dart';
+import '../../features/auth/domain/usecases/login_usecase.dart';
+import '../../features/auth/domain/usecases/register_usecase.dart';
+import '../../features/auth/domain/usecases/logout_usecase.dart';
+import '../../features/auth/domain/usecases/get_current_user_usecase.dart';
+import '../../features/auth/presentation/providers/auth_provider.dart';
 
 /// Dependency Injection container using GetIt
 /// All dependencies are registered here
@@ -24,32 +32,46 @@ Future<void> initDependencies() async {
   );
 
   // ==================== DATA SOURCES ====================
-  // Will be added later when implementing features:
-  // - AuthRemoteDatasource
-  // - ChatbotRemoteDatasource
-  // - SubscriptionRemoteDatasource
-  // - ProfileRemoteDatasource
+  // Auth
+  getIt.registerLazySingleton<AuthRemoteDatasource>(
+    () => AuthRemoteDatasource(getIt<DioClient>()),
+  );
 
   // ==================== REPOSITORIES ====================
-  // Will be added later when implementing features:
-  // - AuthRepository
-  // - ChatbotRepository
-  // - SubscriptionRepository
-  // - ProfileRepository
+  // Auth
+  getIt.registerLazySingleton<AuthRepository>(
+    () => AuthRepositoryImpl(
+      remoteDatasource: getIt<AuthRemoteDatasource>(),
+      secureStorage: getIt<SecureStorage>(),
+      localStorage: getIt<LocalStorage>(),
+    ),
+  );
 
   // ==================== USE CASES ====================
-  // Will be added later when implementing features:
-  // - LoginUsecase
-  // - RegisterUsecase
-  // - SendQueryUsecase
-  // - etc.
+  // Auth
+  getIt.registerLazySingleton<LoginUsecase>(
+    () => LoginUsecase(getIt<AuthRepository>()),
+  );
+  getIt.registerLazySingleton<RegisterUsecase>(
+    () => RegisterUsecase(getIt<AuthRepository>()),
+  );
+  getIt.registerLazySingleton<LogoutUsecase>(
+    () => LogoutUsecase(getIt<AuthRepository>()),
+  );
+  getIt.registerLazySingleton<GetCurrentUserUsecase>(
+    () => GetCurrentUserUsecase(getIt<AuthRepository>()),
+  );
 
   // ==================== PROVIDERS ====================
-  // Will be added later when implementing features:
-  // - AuthProvider
-  // - ChatbotProvider
-  // - SubscriptionProvider
-  // - ProfileProvider
+  // Auth (Factory - new instance each time)
+  getIt.registerFactory<AuthProvider>(
+    () => AuthProvider(
+      loginUsecase: getIt<LoginUsecase>(),
+      registerUsecase: getIt<RegisterUsecase>(),
+      logoutUsecase: getIt<LogoutUsecase>(),
+      getCurrentUserUsecase: getIt<GetCurrentUserUsecase>(),
+    ),
+  );
 }
 
 /// Clear all dependencies (for testing)

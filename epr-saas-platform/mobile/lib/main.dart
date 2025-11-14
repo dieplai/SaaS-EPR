@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'app/theme/app_theme.dart';
 import 'app/constants/app_constants.dart';
 import 'core/di/injection.dart';
+import 'features/auth/presentation/providers/auth_provider.dart';
+import 'features/auth/presentation/screens/splash_screen.dart';
+import 'features/auth/presentation/screens/login_screen.dart';
+import 'features/auth/presentation/screens/register_screen.dart';
 
 void main() async {
   // Ensure Flutter bindings are initialized
@@ -29,85 +34,37 @@ class EPRLegalApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      // App configuration
-      title: AppConstants.appName,
-      debugShowCheckedModeBanner: false,
-
-      // Theme
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.light,
-
-      // Home (temporary - will be replaced with routing)
-      home: const SplashScreen(),
-    );
-  }
-}
-
-/// Temporary splash screen (will be replaced with actual implementation)
-class SplashScreen extends StatelessWidget {
-  const SplashScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF1E3A8A),  // Primary
-              Color(0xFF1E293B),  // Primary Dark
-            ],
-          ),
+    return MultiProvider(
+      providers: [
+        // Auth Provider
+        ChangeNotifierProvider<AuthProvider>(
+          create: (_) => getIt<AuthProvider>(),
         ),
-        child: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Logo placeholder
-              Icon(
-                Icons.balance,
-                size: 120,
-                color: Colors.white,
-              ),
-              SizedBox(height: 24),
+        // TODO: Add more providers here when implementing other features
+        // - ChatbotProvider
+        // - SubscriptionProvider
+        // - ProfileProvider
+      ],
+      child: MaterialApp(
+        // App configuration
+        title: AppConstants.appName,
+        debugShowCheckedModeBanner: false,
 
-              // App name
-              Text(
-                AppConstants.appName,
-                style: TextStyle(
-                  fontSize: 34,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              SizedBox(height: 8),
+        // Theme
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: ThemeMode.light,
 
-              // Tagline
-              Text(
-                AppConstants.appTagline,
-                style: TextStyle(
-                  fontSize: 17,
-                  color: Colors.white70,
-                ),
-              ),
-              SizedBox(height: 48),
-
-              // Loading indicator
-              SizedBox(
-                width: 44,
-                height: 44,
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  strokeWidth: 3,
-                ),
-              ),
-            ],
-          ),
-        ),
+        // Routes
+        initialRoute: '/',
+        routes: {
+          '/': (context) => const SplashScreen(),
+          '/login': (context) => const LoginScreen(),
+          '/register': (context) => const RegisterScreen(),
+          // TODO: Add more routes when implementing other features
+          // '/main': (context) => const MainScreen(),
+          // '/chat': (context) => const ChatScreen(),
+        },
       ),
     );
   }
