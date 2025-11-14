@@ -20,3 +20,47 @@ weaviate-client>=4.0.0
 
 # Production server
 gunicorn==22.0.0
+
+# ============================================
+# TOP-TIER RAG ENHANCEMENTS
+# ============================================
+
+# Hybrid Search (BM25 + Vector)
+rank-bm25==0.2.2
+
+# Advanced Reranking
+sentence-transformers>=2.2.0
+
+# Semantic Caching
+redis>=5.0.0
+gptcache>=0.1.43
+
+# Evaluation & Monitoring
+ragas>=0.1.0
+phoenix-evals>=0.0.4
+phoenix-arize>=3.0.0
+deepeval>=0.20.0
+
+# Query Transformation
+langchain>=0.1.0
+langchain-openai>=0.0.2
+
+# Agent Framework
+llama-index-agent-openai
+
+# Text Processing
+nltk>=3.8.0
+spacy>=3.7.0
+
+# Metrics & Monitoring
+prometheus-client>=0.19.0
+prometheus-fastapi-instrumentator>=6.1.0
+
+# Performance
+asyncio
+aioredis>=2.0.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.12.0
