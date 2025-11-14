@@ -53,7 +53,7 @@ async def startup_event():
     print("✅ Package Service client initialized")
 
     # Check if using advanced RAG or legacy
-    use_advanced = os.getenv("USE_ADVANCED_RAG", "true").lower() == "true"
+    use_advanced = os.getenv("USE_ADVANCED_RAG", "false").lower() == "true"
 
     if use_advanced:
         print("\n🎯 Loading ADVANCED RAG System...\n")

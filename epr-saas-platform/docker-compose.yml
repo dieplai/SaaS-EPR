@@ -153,6 +153,7 @@ services:
       - WEAVIATE_URL=${WEAVIATE_URL}
       - WEAVIATE_API_KEY=${WEAVIATE_API_KEY}
       - WEAVIATE_CLASS_NAME=${WEAVIATE_CLASS_NAME:-EprDocument}
+      - USE_ADVANCED_RAG=true
     volumes:
       - ./backend/services/ai-chatbot-service:/app:cached
     depends_on:

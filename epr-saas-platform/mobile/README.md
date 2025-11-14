@@ -1,261 +1,99 @@
-# EPR Legal Mobile App
-
-Mobile application for EPR Legal SaaS Platform - AI-powered legal consultation for businesses.
-
-## 🏗️ Architecture
-
-This project follows **Clean Architecture** principles with a **Feature-First** structure:
-
-```
-lib/
-├── app/                    # App-level configuration
-│   ├── routes/            # Navigation
-│   ├── theme/             # Theming
-│   └── constants/         # Constants
-├── core/                   # Core utilities
-│   ├── network/           # HTTP client (Dio)
-│   ├── storage/           # Local & Secure storage
-│   ├── error/             # Error handling
-│   ├── utils/             # Utilities
-│   └── di/                # Dependency Injection (GetIt)
-└── features/               # Features (Auth, Chatbot, etc.)
-    └── {feature}/
-        ├── data/          # Data layer (API, models, repositories)
-        ├── domain/        # Business logic (entities, usecases)
-        └── presentation/  # UI (screens, widgets, providers)
-```
+<div align="center">
+  <img src="assets/app_icon.png" alt="Kelivo Icon" width="100" />
+  <h1>Kelivo</h1>
 
-## 🚀 Getting Started
+A Flutter LLM Chat Client
 
-### Prerequisites
+  <a href="https://discord.gg/Tb8DyvvV5T" target="_blank">
+    <img src="https://img.shields.io/badge/Join%20our%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join Discord"/>
+  </a>
+  <a href="https://qm.qq.com/q/OQaXetKssC" target="_blank" style="margin-left: 6px;">
+    <img src="https://img.shields.io/badge/Join%20QQ%20Group-%230366CC?style=for-the-badge&logo=qq&logoColor=white" alt="Join QQ Group"/>
+  </a>
 
-1. **Install Flutter SDK** (version 3.2.0 or higher)
-   ```bash
-   # Download from: https://flutter.dev/docs/get-started/install
-   # Or use fvm: fvm install 3.19.0
-   ```
 
-2. **Install Android Studio** (for Android development)
-   - Install Android SDK
-   - Setup Android Emulator
+English | [简体中文](README_ZH_CN.md)
+</div>
 
-3. **Verify installation**
-   ```bash
-   flutter doctor
-   ```
+<div align="center">
+  <img src="docx/screenshot_1.png" alt="Chat Screen" width="150" />
+  <img src="docx/screenshot_2.png" alt="Model Selection" width="150" />
+  <img src="docx/screenshot_3.png" alt="Tool Calling" width="150" />
+  <img src="docx/screenshot_4.png" alt="Web Search" width="150" />
+</div>
 
-### Setup Project
+## 🚀 Download
 
-1. **Navigate to project directory**
-   ```bash
-   cd /home/dieplai/Documents/luanvan/epr-saas-platform/mobile
-   ```
+[![Download on the App Store](https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg)](https://apps.apple.com/us/app/kelivo/id6752122930)
 
-2. **Install dependencies**
-   ```bash
-   flutter pub get
-   ```
+🔗 [Download the latest version](https://github.com/Chevey339/kelivo/releases/latest)
 
-3. **Generate code** (for JSON serialization, Freezed models)
-   ```bash
-   flutter pub run build_runner build --delete-conflicting-outputs
-   ```
+🔗 [TestFlight](https://testflight.apple.com/join/PZZyRMyY) for beta testing.
 
-4. **Configure environment**
-   - Edit `.env.dev` for development
-   - Edit `.env.prod` for production
-   - Update API URLs to point to your backend services
+## 💖 Sponsors
 
-### Run the App
+Thanks to [siliconflow.cn](https://siliconflow.cn) for providing free models in cooperation with us.
 
-**Development mode (with hot reload):**
-```bash
-flutter run
-```
+## ✨ Features
 
-**Specific device:**
-```bash
-# List devices
-flutter devices
+- 🎨 **Modern Design** - Material You design language with dynamic color theming support (Android 12+).
+- 🌙 **Dark Mode** - Perfectly adapted dark theme to protect your eyes.
+- 🌍 **Multi-language Support** - Supports both English and Chinese interfaces.
+- 🖥️ **Multi-platform Support** - Mobile (Android/iOS/Harmony) and Desktop (Windows/macOS/Linux).
+- 🔄 **Multi-provider Support** - Supports major AI providers like OpenAI, Google Gemini, Anthropic, etc.
+- 🤖 **Custom Assistants** - Create and manage personalized AI assistants.
+- 🖼️ **Multimodal Input** - Supports various formats including images, text documents, PDFs, Word documents, etc.
+- 📝 **Markdown Rendering** - Full support for code highlighting, LaTeX formulas, tables, and more.
+- 🎙️ **Voice/TTS Providers** - Built-in system TTS plus OpenAI / Google Gemini / ElevenLabs voice servers.
+- 🛠️ **MCP Support** - Model Context Protocol tool integration.
+- 🧰 **Built-in MCP Tools** - Includes a built-in MCP Fetch tool.
+- 🔍 **Web Search** - Integrated with multiple search engines (Exa, Tavily, Zhipu, LinkUp, Brave, Bing, Metaso, SearXNG, Ollama, Jina, Perplexity, Bocha).
+- 🧩 **Prompt Variables** - Supports dynamic variables like model name, time, etc.
+- 📤 **QR Code Sharing** - Export and import provider configurations via QR codes.
+- 💾 **Data Backup** - Supports chat history backup and restoration.
+- 🌐 **Custom Requests** - Supports custom HTTP request headers and bodies.
+- 🔡 **Custom Fonts** - Bring your own fonts (system fonts / Google Fonts).
+- ⚙️ **Android Background Generation** - Keep chat generation running in the background (optional setting).
 
-# Run on specific device
-flutter run -d <device_id>
+## 📱 Platform Support
 
-# Run on Android emulator
-flutter run -d emulator-5554
+- ✅ Android
+- ✅ iOS
+- ✅ Harmony ([kelivo-ohos](https://github.com/Chevey339/kelivo-ohos))
+- ✅ Windows
+- ✅ macOS
+- ✅ Linux
 
-# Run on physical device
-flutter run -d <device_serial>
-```
+## 🤝 Contribution Guide
 
-**Build APK for testing:**
-```bash
-# Debug APK
-flutter build apk --debug
+Pull Requests and Issues are welcome!
 
-# Release APK
-flutter build apk --release
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-# APK will be at: build/app/outputs/flutter-apk/app-release.apk
-```
+## ❤️ Acknowledgements
 
-**Install APK on device:**
-```bash
-flutter install
-```
+Special thanks to the [RikkaHub](https://github.com/re-ovo/rikkahub) project for the UI design inspiration. Kelivo's interface design is heavily inspired by RikkaHub's beautiful and practical design.
 
-## 🛠️ Development
+## ⭐ Star History
 
-### Code Generation
+If you like this project, please give it a star ⭐
 
-When you modify models with `@JsonSerializable` or `@freezed`:
-
-```bash
-# Watch mode (auto-generate on save)
-flutter pub run build_runner watch
-
-# One-time generation
-flutter pub run build_runner build --delete-conflicting-outputs
-```
-
-### Linting
-
-```bash
-flutter analyze
-```
-
-### Testing
-
-```bash
-# Run all tests
-flutter test
-
-# Run specific test file
-flutter test test/features/auth/login_test.dart
-
-# Run with coverage
-flutter test --coverage
-```
-
-## 📦 Backend Services
-
-Make sure your backend services are running:
-
-```bash
-cd /home/dieplai/Documents/luanvan/epr-saas-platform
-docker-compose up -d
-```
-
-**Services:**
-- User Service: http://localhost:8001
-- Package Service: http://localhost:8002
-- AI Chatbot Service: http://localhost:8004
-
-## 🏃‍♂️ Running on Physical Device
-
-### Android
-
-1. Enable Developer Options on your device
-2. Enable USB Debugging
-3. Connect device via USB
-4. Run `flutter run`
-
-### iOS (requires macOS)
-
-1. Open `ios/Runner.xcworkspace` in Xcode
-2. Select your device
-3. Click Run
-
-## 🔨 Build for Production
-
-### Android
-
-```bash
-# Build release APK
-flutter build apk --release
-
-# Build App Bundle (for Google Play)
-flutter build appbundle --release
-
-# Output: build/app/outputs/bundle/release/app-release.aab
-```
-
-### iOS (requires macOS)
-
-```bash
-flutter build ios --release
-```
-
-## 📱 Google Play Deployment
-
-1. **Register Google Play Developer Account** ($25 one-time fee)
-   - https://play.google.com/console/signup
-
-2. **Create App in Play Console**
-   - Add app details, screenshots, description
-   - Set up content rating, target audience
-
-3. **Upload App Bundle**
-   ```bash
-   flutter build appbundle --release
-   ```
-   - Upload `build/app/outputs/bundle/release/app-release.aab`
-
-4. **Submit for Review** (1-7 days)
-
-## 🧪 Testing API Integration
-
-Update backend URLs in `.env.dev`:
-
-```bash
-# For Android Emulator (localhost = 10.0.2.2)
-USER_SERVICE_URL=http://10.0.2.2:8001/api/v1
-PACKAGE_SERVICE_URL=http://10.0.2.2:8002/api/v1
-AI_CHATBOT_URL=http://10.0.2.2:8004/api/v1
-
-# For Physical Device (use your computer's IP)
-USER_SERVICE_URL=http://192.168.1.100:8001/api/v1
-```
-
-## 🔑 Key Dependencies
-
-- **State Management**: `provider`
-- **Networking**: `dio`, `pretty_dio_logger`
-- **Storage**: `flutter_secure_storage`, `shared_preferences`
-- **DI**: `get_it`, `injectable`
-- **Routing**: `go_router`
-- **Code Gen**: `freezed`, `json_serializable`
-- **Chat UI**: `flutter_chat_ui`
-- **Utils**: `dartz`, `equatable`, `intl`, `uuid`
-
-## 📝 Project Status
-
-✅ **Completed:**
-- Clean Architecture structure
-- Core layer (network, storage, error handling, DI)
-- Authentication feature (login, register, logout)
-- Theme system (light/dark mode)
-- Environment configuration
-
-🚧 **TODO:**
-- Register screen UI
-- Home screen
-- Chatbot feature
-- Subscription management
-- User profile
-- PDF viewer for legal documents
-- Push notifications
-- Unit tests
-- Widget tests
-
-## 🤝 Contributing
-
-1. Create feature branch
-2. Follow Clean Architecture pattern
-3. Write tests
-4. Run `flutter analyze` and `flutter test`
-5. Submit pull request
+[![Star History Chart](https://api.star-history.com/svg?repos=Chevey339/kelivo&type=Date)](https://star-history.com/#Chevey339/kelivo&Date)
 
 ## 📄 License
 
-Proprietary - EPR Legal SaaS Platform
+This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details.
+
+## 📞 Contact Us
+
+- Issue: [GitHub Issues](https://github.com/Chevey339/kelivo/issues)
+
+---
+
+<div align="center">
+Made with ❤️ using Flutter
+</div>

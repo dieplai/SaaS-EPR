@@ -37,9 +37,8 @@ gptcache>=0.1.43
 
 # Evaluation & Monitoring
 ragas>=0.1.0
-phoenix-evals>=0.0.4
-phoenix-arize>=3.0.0
-deepeval>=0.20.0
+# Note: phoenix-evals and phoenix-arize removed (package compatibility issues)
+# deepeval removed (not critical for MVP)
 
 # Query Transformation
 langchain>=0.1.0

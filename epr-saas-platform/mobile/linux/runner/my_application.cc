@@ -1,6 +1,7 @@
 #include "my_application.h"
 
 #include <flutter_linux/flutter_linux.h>
+#include <gio/gio.h>
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
@@ -13,11 +14,6 @@ struct _MyApplication {
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
-
-// Called when first Flutter frame received.
-static void first_frame_cb(MyApplication* self, FlView* view) {
-  gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
-}
 
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
@@ -45,52 +41,129 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "epr_legal_mobile");
+    gtk_header_bar_set_title(header_bar, "kelivo");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "epr_legal_mobile");
+    gtk_window_set_title(window, "kelivo");
   }
 
   gtk_window_set_default_size(window, 1280, 720);
+  gtk_widget_show(GTK_WIDGET(window));
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
-  fl_dart_project_set_dart_entrypoint_arguments(
-      project, self->dart_entrypoint_arguments);
+  fl_dart_project_set_dart_entrypoint_arguments(project, self->dart_entrypoint_arguments);
 
   FlView* view = fl_view_new(project);
-  GdkRGBA background_color;
-  // Background defaults to black, override it here if necessary, e.g. #00000000
-  // for transparent.
-  gdk_rgba_parse(&background_color, "#000000");
-  fl_view_set_background_color(view, &background_color);
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
-
-  // Show the window when Flutter renders.
-  // Requires the view to be realized so we can start rendering.
-  g_signal_connect_swapped(view, "first-frame", G_CALLBACK(first_frame_cb),
-                           self);
-  gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
+
+  // Method channel for clipboard images
+  FlEngine* engine = fl_view_get_engine(view);
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  g_autoptr(FlMethodChannel) channel = fl_method_channel_new(fl_engine_get_binary_messenger(engine),
+                                                             "app.clipboard", FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(channel, [](FlMethodChannel* channel, FlMethodCall* method_call, gpointer user_data) {
+    const gchar* name = fl_method_call_get_name(method_call);
+    if (g_strcmp0(name, "getClipboardImages") == 0) {
+      FlValue* list = fl_value_new_list();
+      GtkClipboard* cb = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
+      GdkPixbuf* pixbuf = gtk_clipboard_wait_for_image(cb);
+      if (pixbuf != nullptr) {
+        const char* tmp = g_get_tmp_dir();
+        gchar* filename = g_strdup_printf("%s/pasted_%ld.png", tmp, time(nullptr));
+        GError* err = nullptr;
+        gdk_pixbuf_save(pixbuf, filename, "png", &err, NULL);
+        if (err == nullptr) {
+          fl_value_append_take(list, fl_value_new_string(filename));
+        }
+        g_clear_error(&err);
+        g_free(filename);
+        g_object_unref(pixbuf);
+      }
+      g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(fl_method_success_response_new(list));
+      fl_method_call_respond(method_call, response, nullptr);
+    } else if (g_strcmp0(name, "getClipboardFiles") == 0) {
+      FlValue* list = fl_value_new_list();
+      GtkClipboard* cb = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
+      gchar* text = gtk_clipboard_wait_for_text(cb);
+      if (text != nullptr) {
+        // Common formats: "x-special/gnome-copied-files" content like:
+        //   copy\nfile:///path1\nfile:///path2
+        // or plain "text/uri-list" with file:// URIs per line.
+        gchar** lines = g_strsplit(text, "\n", -1);
+        for (gchar** it = lines; it != nullptr && *it != nullptr; ++it) {
+          const gchar* line = *it;
+          if (line == nullptr || *line == '\0') continue;
+          if (g_strcmp0(line, "copy") == 0) continue; // GNOME prefix
+          if (g_str_has_prefix(line, "file://")) {
+            GFile* gf = g_file_new_for_uri(line);
+            if (gf != nullptr) {
+              char* path = g_file_get_path(gf);
+              if (path != nullptr) {
+                fl_value_append_take(list, fl_value_new_string(path));
+                g_free(path);
+              }
+              g_object_unref(gf);
+            }
+          }
+        }
+        g_strfreev(lines);
+        g_free(text);
+      }
+      g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(fl_method_success_response_new(list));
+      fl_method_call_respond(method_call, response, nullptr);
+    } else if (g_strcmp0(name, "setClipboardImage") == 0) {
+      // Expect a file path string argument
+      FlValue* args = fl_method_call_get_args(method_call);
+      const gchar* path = nullptr;
+      if (args != nullptr) {
+        if (fl_value_get_type(args) == FL_VALUE_TYPE_STRING) {
+          path = fl_value_get_string(args);
+        } else if (fl_value_get_type(args) == FL_VALUE_TYPE_MAP) {
+          FlValue* v = fl_value_lookup_string(args, "path");
+          if (v && fl_value_get_type(v) == FL_VALUE_TYPE_STRING) {
+            path = fl_value_get_string(v);
+          }
+        }
+      }
+      gboolean ok = FALSE;
+      if (path != nullptr) {
+        GError* err = nullptr;
+        GdkPixbuf* pix = gdk_pixbuf_new_from_file(path, &err);
+        if (pix != nullptr) {
+          GtkClipboard* cb = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
+          gtk_clipboard_set_image(cb, pix);
+          gtk_clipboard_store(cb);
+          ok = TRUE;
+          g_object_unref(pix);
+        }
+        g_clear_error(&err);
+      }
+      g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(fl_method_success_response_new(fl_value_new_bool(ok)));
+      fl_method_call_respond(method_call, response, nullptr);
+    } else {
+      g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+      fl_method_call_respond(method_call, response, nullptr);
+    }
+  }, nullptr, nullptr);
 }
 
 // Implements GApplication::local_command_line.
-static gboolean my_application_local_command_line(GApplication* application,
-                                                  gchar*** arguments,
-                                                  int* exit_status) {
+static gboolean my_application_local_command_line(GApplication* application, gchar*** arguments, int* exit_status) {
   MyApplication* self = MY_APPLICATION(application);
   // Strip out the first argument as it is the binary name.
   self->dart_entrypoint_arguments = g_strdupv(*arguments + 1);
 
   g_autoptr(GError) error = nullptr;
   if (!g_application_register(application, nullptr, &error)) {
-    g_warning("Failed to register: %s", error->message);
-    *exit_status = 1;
-    return TRUE;
+     g_warning("Failed to register: %s", error->message);
+     *exit_status = 1;
+     return TRUE;
   }
 
   g_application_activate(application);
@@ -101,7 +174,7 @@ static gboolean my_application_local_command_line(GApplication* application,
 
 // Implements GApplication::startup.
 static void my_application_startup(GApplication* application) {
-  // MyApplication* self = MY_APPLICATION(object);
+  //MyApplication* self = MY_APPLICATION(object);
 
   // Perform any actions required at application startup.
 
@@ -110,7 +183,7 @@ static void my_application_startup(GApplication* application) {
 
 // Implements GApplication::shutdown.
 static void my_application_shutdown(GApplication* application) {
-  // MyApplication* self = MY_APPLICATION(object);
+  //MyApplication* self = MY_APPLICATION(object);
 
   // Perform any actions required at application shutdown.
 
@@ -126,8 +199,7 @@ static void my_application_dispose(GObject* object) {
 
 static void my_application_class_init(MyApplicationClass* klass) {
   G_APPLICATION_CLASS(klass)->activate = my_application_activate;
-  G_APPLICATION_CLASS(klass)->local_command_line =
-      my_application_local_command_line;
+  G_APPLICATION_CLASS(klass)->local_command_line = my_application_local_command_line;
   G_APPLICATION_CLASS(klass)->startup = my_application_startup;
   G_APPLICATION_CLASS(klass)->shutdown = my_application_shutdown;
   G_OBJECT_CLASS(klass)->dispose = my_application_dispose;
@@ -143,6 +215,7 @@ MyApplication* my_application_new() {
   g_set_prgname(APPLICATION_ID);
 
   return MY_APPLICATION(g_object_new(my_application_get_type(),
-                                     "application-id", APPLICATION_ID, "flags",
-                                     G_APPLICATION_NON_UNIQUE, nullptr));
+                                     "application-id", APPLICATION_ID,
+                                     "flags", G_APPLICATION_NON_UNIQUE,
+                                     nullptr));
 }
