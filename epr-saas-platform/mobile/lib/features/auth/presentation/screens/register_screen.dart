@@ -56,14 +56,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!mounted) return;
 
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(AppConstants.successRegister),
-          backgroundColor: AppColors.success,
-        ),
-      );
-      // Navigate to main
-      // Navigator.pushReplacementNamed(context, RouteNames.main);
+      // Navigate to main screen
+      Navigator.pushReplacementNamed(context, '/main');
     } else {
       final error = context.read<AuthProvider>().errorMessage;
       if (error != null) {

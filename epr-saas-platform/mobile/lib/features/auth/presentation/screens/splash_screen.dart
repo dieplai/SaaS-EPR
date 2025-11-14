@@ -70,11 +70,8 @@ class _SplashScreenState extends State<SplashScreen>
 
       if (token != null && token.isNotEmpty && isLoggedIn) {
         // User is authenticated, navigate to main screen
-        // TODO: Navigate to main screen when implemented
         if (mounted) {
-          // Navigator.pushReplacementNamed(context, RouteNames.main);
-          // For now, navigate to login
-          Navigator.pushReplacementNamed(context, '/login');
+          Navigator.pushReplacementNamed(context, '/main');
         }
       } else {
         // User is not authenticated, navigate to login

@@ -50,14 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (success) {
       // Navigate to main screen
-      // TODO: Navigate to main screen when implemented
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(AppConstants.successLogin),
-          backgroundColor: AppColors.success,
-        ),
-      );
-      // Navigator.pushReplacementNamed(context, RouteNames.main);
+      Navigator.pushReplacementNamed(context, '/main');
     } else {
       // Show error
       final error = context.read<AuthProvider>().errorMessage;
