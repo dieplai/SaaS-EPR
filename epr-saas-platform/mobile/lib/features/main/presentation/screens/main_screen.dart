@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
-import '../../../home/presentation/screens/home_screen.dart';
+import '../../../../shared/widgets/app_drawer.dart';
 import '../../../chatbot/presentation/screens/chat_screen.dart';
 
-/// Main screen with bottom tab navigation
-/// Integrates Home, Chat, Subscription, Profile features
+/// Main screen - Perplexity Pro style layout
+/// Clean design: top bar + chat + input
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -14,58 +14,57 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _currentIndex = 0;
-
-  final List<Widget> _screens = [
-    const HomeScreen(),
-    const ChatScreen(),
-    const _SubscriptionPlaceholder(),
-    const _ProfilePlaceholder(),
-  ];
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.textSecondary,
-        selectedLabelStyle: AppTextStyles.caption.copyWith(
-          fontWeight: FontWeight.w600,
+      key: _scaffoldKey,
+      backgroundColor: AppColors.background,
+      drawer: const AppDrawer(),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Top bar - Hamburger menu, Settings & History icons
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  // Hamburger menu
+                  IconButton(
+                    icon: const Icon(Icons.menu),
+                    color: AppColors.textSecondary,
+                    onPressed: () {
+                      _scaffoldKey.currentState?.openDrawer();
+                    },
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.history_outlined),
+                    color: AppColors.textSecondary,
+                    onPressed: () {
+                      // TODO: Show conversation history
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.settings_outlined),
+                    color: AppColors.textSecondary,
+                    onPressed: () {
+                      // TODO: Settings
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            const Divider(height: 1),
+
+            // Chat area
+            const Expanded(
+              child: ChatScreen(),
+            ),
+          ],
         ),
-        unselectedLabelStyle: AppTextStyles.caption,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Trang chủ',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline),
-            activeIcon: Icon(Icons.chat_bubble),
-            label: 'Tư vấn',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.card_membership_outlined),
-            activeIcon: Icon(Icons.card_membership),
-            label: 'Gói dịch vụ',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Tôi',
-          ),
-        ],
       ),
     );
   }

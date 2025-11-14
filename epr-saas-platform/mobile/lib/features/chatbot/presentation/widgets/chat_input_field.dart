@@ -48,12 +48,15 @@ class _ChatInputFieldState extends State<ChatInputField> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppDimensions.spacingMD),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimensions.spacingMD,
+        vertical: AppDimensions.spacingMD,
+      ),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.background,
         border: Border(
           top: BorderSide(
-            color: AppColors.border,
+            color: AppColors.borderLight,
             width: 1,
           ),
         ),
@@ -62,70 +65,78 @@ class _ChatInputFieldState extends State<ChatInputField> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            // Text input
+            // Text input - Simple & Clean
             Expanded(
-              child: Container(
-                constraints: const BoxConstraints(
-                  minHeight: 44,
-                  maxHeight: 120,
+              child: TextField(
+                controller: widget.controller,
+                enabled: widget.isEnabled,
+                maxLines: null,
+                minLines: 1,
+                textCapitalization: TextCapitalization.sentences,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textPrimary,
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppDimensions.spacingMD,
-                  vertical: AppDimensions.spacingXS,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.inputBackground,
-                  borderRadius: BorderRadius.circular(AppDimensions.radiusXL),
-                  border: Border.all(
-                    color: AppColors.border,
-                    width: 1,
+                decoration: InputDecoration(
+                  hintText: 'Câu hỏi của bạn...',
+                  hintStyle: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textTertiary,
                   ),
-                ),
-                child: TextField(
-                  controller: widget.controller,
-                  enabled: widget.isEnabled,
-                  maxLines: null,
-                  textCapitalization: TextCapitalization.sentences,
-                  style: AppTextStyles.bodyMedium,
-                  decoration: InputDecoration(
-                    hintText: 'Đặt câu hỏi pháp lý...',
-                    hintStyle: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.textTertiary,
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: AppDimensions.spacingXS,
+                  border: UnderlineInputBorder(
+                    borderSide: BorderSide(
+                      color: AppColors.border,
+                      width: 1,
                     ),
                   ),
-                  onSubmitted: (_) {
-                    if (_hasText && widget.isEnabled) {
-                      widget.onSend();
-                    }
-                  },
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(
+                      color: AppColors.borderLight,
+                      width: 1,
+                    ),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(
+                      color: AppColors.primary,
+                      width: 2,
+                    ),
+                  ),
+                  disabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(
+                      color: AppColors.borderLight,
+                      width: 1,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: AppDimensions.spacingXS,
+                  ),
                 ),
+                onSubmitted: (_) {
+                  if (_hasText && widget.isEnabled) {
+                    widget.onSend();
+                  }
+                },
               ),
             ),
 
-            const SizedBox(width: AppDimensions.spacingXS),
+            const SizedBox(width: AppDimensions.spacingMD),
 
-            // Send button
-            Material(
-              color: _hasText && widget.isEnabled
-                  ? AppColors.primary
-                  : AppColors.textTertiary,
-              borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
-              child: InkWell(
-                onTap: _hasText && widget.isEnabled ? widget.onSend : null,
-                borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.arrow_upward,
-                    color: Colors.white,
-                    size: 20,
-                  ),
+            // Send button - Minimalist
+            GestureDetector(
+              onTap: _hasText && widget.isEnabled ? widget.onSend : null,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _hasText && widget.isEnabled
+                      ? AppColors.primary
+                      : AppColors.borderLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.send_rounded,
+                  color: _hasText && widget.isEnabled
+                      ? Colors.white
+                      : AppColors.textTertiary,
+                  size: 18,
                 ),
               ),
             ),

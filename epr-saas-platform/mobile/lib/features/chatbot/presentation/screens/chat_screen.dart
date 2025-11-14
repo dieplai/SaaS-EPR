@@ -79,20 +79,10 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: CustomAppBar(
-        title: context.watch<ChatbotProvider>().currentConversation?.title ??
-            'Trò chuyện mới',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert),
-            onPressed: () => _showOptionsMenu(context),
-          ),
-        ],
-      ),
       body: SafeArea(
         child: Column(
           children: [
-            // Messages list
+            // Messages list or empty state
             Expanded(
               child: _buildMessagesList(),
             ),
@@ -101,17 +91,17 @@ class _ChatScreenState extends State<ChatScreen> {
             Consumer<ChatbotProvider>(
               builder: (context, provider, child) {
                 if (provider.isStreaming) {
-                  return const TypingIndicator();
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: TypingIndicator(),
+                  );
                 }
                 return const SizedBox.shrink();
               },
             ),
 
-            // Input field
-            ChatInputField(
-              controller: _messageController,
-              onSend: _sendMessage,
-            ),
+            // Input field - Perplexity Pro style
+            _buildInputField(),
           ],
         ),
       ),
@@ -126,19 +116,50 @@ class _ChatScreenState extends State<ChatScreen> {
           return const Center(child: LoadingIndicator());
         }
 
-        // Empty state
+        // Empty state - Show EPR Legal logo
         if (!provider.hasMessages && !provider.isSending) {
-          return const EmptyState(
-            icon: Icons.chat_bubble_outline,
-            title: 'Bắt đầu cuộc trò chuyện',
-            message: 'Hãy đặt câu hỏi pháp lý của bạn',
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                RichText(
+                  text: TextSpan(
+                    style: TextStyle(
+                      fontSize: 36,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.textSecondary,
+                    ),
+                    children: [
+                      const TextSpan(text: 'EPR '),
+                      TextSpan(
+                        text: 'Legal',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'AI Tư vấn pháp lý',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+              ],
+            ),
           );
         }
 
         // Messages
         return ListView.builder(
           controller: _scrollController,
-          padding: const EdgeInsets.all(AppDimensions.screenPaddingH),
+          padding: const EdgeInsets.only(
+            top: AppDimensions.spacingMD,
+            bottom: AppDimensions.spacingMD,
+          ),
           itemCount: provider.messages.length,
           itemBuilder: (context, index) {
             final message = provider.messages[index];
@@ -151,6 +172,68 @@ class _ChatScreenState extends State<ChatScreen> {
           },
         );
       },
+    );
+  }
+
+  Widget _buildInputField() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Input field
+            Expanded(
+              child: TextField(
+                controller: _messageController,
+                decoration: InputDecoration(
+                  hintText: 'Hỏi về pháp lý EPR...',
+                  hintStyle: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textTertiary,
+                  ),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+                style: AppTextStyles.bodyMedium,
+                onSubmitted: (_) => _sendMessage(),
+              ),
+            ),
+
+            // Send button
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_upward),
+                  color: Colors.white,
+                  iconSize: 20,
+                  onPressed: _sendMessage,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

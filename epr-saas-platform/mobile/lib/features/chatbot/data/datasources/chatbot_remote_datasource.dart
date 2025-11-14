@@ -222,13 +222,8 @@ class ChatbotRemoteDatasource {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        if (response.data['success'] == true) {
-          return QueryResponseModel.fromJson(response.data['data']);
-        } else {
-          throw ServerException(
-            response.data['message'] ?? 'Failed to send query',
-          );
-        }
+        // Backend returns response directly, not wrapped in {success, data}
+        return QueryResponseModel.fromJson(response.data);
       } else {
         throw ServerException('Failed to send query');
       }

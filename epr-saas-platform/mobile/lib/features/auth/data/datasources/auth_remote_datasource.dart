@@ -61,7 +61,7 @@ class AuthRemoteDatasource {
   }) async {
     try {
       _logger.logRequest('POST', ApiConstants.register, {
-        'name': name,
+        'full_name': name,
         'email': email,
         'phone': phone,
       });
@@ -69,7 +69,7 @@ class AuthRemoteDatasource {
       final response = await dioClient.post(
         '${ApiConstants.userServiceUrl}${ApiConstants.register}',
         data: {
-          'name': name,
+          'full_name': name,
           'email': email,
           'password': password,
           if (phone != null) 'phone': phone,
@@ -175,7 +175,7 @@ class AuthRemoteDatasource {
             );
           case 429:
             throw QuotaExceededException(message);
-          case >= 500:
+          case var x when x != null && x >= 500:
             throw ServerException(message);
           default:
             throw ServerException(message);

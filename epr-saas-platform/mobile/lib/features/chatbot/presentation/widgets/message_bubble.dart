@@ -21,15 +21,14 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppDimensions.spacingLG),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimensions.spacingMD,
+        vertical: AppDimensions.spacingSM,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (message.isAiMessage) ...[
-            _buildAvatar(),
-            const SizedBox(width: AppDimensions.spacingMD),
-          ],
-          Expanded(
+          Flexible(
             child: Column(
               crossAxisAlignment: message.isUserMessage
                   ? CrossAxisAlignment.end
@@ -45,43 +44,7 @@ class MessageBubble extends StatelessWidget {
               ],
             ),
           ),
-          if (message.isUserMessage) ...[
-            const SizedBox(width: AppDimensions.spacingMD),
-            _buildUserAvatar(),
-          ],
         ],
-      ),
-    );
-  }
-
-  Widget _buildAvatar() {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
-      ),
-      child: const Icon(
-        Icons.smart_toy_outlined,
-        color: Colors.white,
-        size: 20,
-      ),
-    );
-  }
-
-  Widget _buildUserAvatar() {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: AppColors.textSecondary,
-        borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
-      ),
-      child: const Icon(
-        Icons.person_outline,
-        color: Colors.white,
-        size: 20,
       ),
     );
   }
@@ -89,20 +52,25 @@ class MessageBubble extends StatelessWidget {
   Widget _buildMessageContent() {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppDimensions.spacingLG,
-        vertical: AppDimensions.spacingMD,
+        horizontal: AppDimensions.spacingMD,
+        vertical: AppDimensions.spacingSM,
       ),
       decoration: BoxDecoration(
         color: message.isUserMessage
             ? AppColors.userMessageBg
             : AppColors.aiMessageBg,
-        borderRadius: BorderRadius.circular(AppDimensions.radiusLG),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: SelectableText(
         message.content,
-        style: message.isUserMessage
-            ? AppTextStyles.chatUserMessage
-            : AppTextStyles.chatAiMessage,
+        style: (message.isUserMessage
+                ? AppTextStyles.chatUserMessage
+                : AppTextStyles.chatAiMessage)
+            .copyWith(
+          fontSize: 14,
+          fontWeight: FontWeight.w500, // Bold để cảm giác to
+          height: 1.4,
+        ),
       ),
     );
   }

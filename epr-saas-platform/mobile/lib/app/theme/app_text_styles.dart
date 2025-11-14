@@ -130,6 +130,16 @@ class AppTextStyles {
     color: AppColors.textTertiary,
   );
 
+  /// Body Small SemiBold
+  /// 13px / SemiBold / Primary
+  static const TextStyle bodySmallSemiBold = TextStyle(
+    fontFamily: _primaryFont,
+    fontSize: 13,
+    fontWeight: FontWeight.w600,
+    height: 1.4,
+    color: AppColors.textPrimary,
+  );
+
   // ==================== BUTTON STYLES ====================
   /// Button Large - Primary buttons
   /// 17px / SemiBold / White

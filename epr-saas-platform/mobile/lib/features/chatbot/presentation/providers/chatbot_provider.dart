@@ -180,11 +180,12 @@ class ChatbotProvider extends ChangeNotifier {
     String? conversationId,
   }) async {
     // If no conversation ID provided, use current conversation
-    final targetConversationId = conversationId ?? _currentConversation?.id;
+    var targetConversationId = conversationId ?? _currentConversation?.id;
 
+    // If no conversation exists, use a temporary ID
+    // Backend will create/associate the message with a conversation
     if (targetConversationId == null) {
-      _setError('Không có cuộc trò chuyện nào được chọn');
-      return false;
+      targetConversationId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
     }
 
     _isSending = true;

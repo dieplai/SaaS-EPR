@@ -1,20 +1,30 @@
+import 'dart:io';
+
 /// API endpoints and configuration
 class ApiConstants {
   // Private constructor
   ApiConstants._();
 
   // ==================== BASE URLS ====================
+  /// Get the correct host - use localhost for desktop, 10.0.2.2 for Android emulator
+  static String get _baseHost {
+    if (Platform.isAndroid) {
+      return '10.0.2.2';
+    }
+    return 'localhost';
+  }
+
   /// User service base URL
-  static const String userServiceUrl =
-      String.fromEnvironment('USER_SERVICE_URL', defaultValue: 'http://localhost:8001/api/v1');
+  static String get userServiceUrl =>
+      String.fromEnvironment('USER_SERVICE_URL', defaultValue: 'http://$_baseHost:8001/api/v1');
 
   /// Package service base URL
-  static const String packageServiceUrl =
-      String.fromEnvironment('PACKAGE_SERVICE_URL', defaultValue: 'http://localhost:8002/api/v1');
+  static String get packageServiceUrl =>
+      String.fromEnvironment('PACKAGE_SERVICE_URL', defaultValue: 'http://$_baseHost:8002/api/v1');
 
   /// AI Chatbot service base URL
-  static const String chatbotServiceUrl =
-      String.fromEnvironment('AI_CHATBOT_URL', defaultValue: 'http://localhost:8004/api/v1');
+  static String get chatbotServiceUrl =>
+      String.fromEnvironment('AI_CHATBOT_URL', defaultValue: 'http://$_baseHost:8004/api/v1');
 
   // ==================== AUTH ENDPOINTS ====================
   /// Login endpoint
@@ -53,34 +63,34 @@ class ApiConstants {
 
   // ==================== CHATBOT ENDPOINTS ====================
 
-  // Conversations
-  /// Create conversation
+  // Conversations (Backend may not support all endpoints)
+  /// Create conversation - NOT IMPLEMENTED IN BACKEND
   static const String createConversation = '/conversations';
 
-  /// Get conversations list
+  /// Get conversations list - NOT IMPLEMENTED IN BACKEND
   static const String getConversations = '/conversations';
 
-  /// Get conversation by ID
+  /// Get conversation by ID - NOT IMPLEMENTED IN BACKEND
   static const String getConversationById = '/conversations';
 
-  /// Update conversation
+  /// Update conversation - NOT IMPLEMENTED IN BACKEND
   static const String updateConversation = '/conversations';
 
-  /// Delete conversation
+  /// Delete conversation - NOT IMPLEMENTED IN BACKEND
   static const String deleteConversation = '/conversations';
 
-  /// Search conversations
+  /// Search conversations - NOT IMPLEMENTED IN BACKEND
   static const String searchConversations = '/conversations/search';
 
-  /// Get conversation statistics
+  /// Get conversation statistics - NOT IMPLEMENTED IN BACKEND
   static const String getConversationStats = '/conversations/stats';
 
   // Messages
   /// Send query/message
-  static const String sendQuery = '/chat/query';
+  static const String sendQuery = '/query';
 
   /// Stream chat response (Server-Sent Events)
-  static const String streamChat = '/chat/stream';
+  static const String streamChat = '/stream';
 
   /// Get chat history
   static const String getChatHistory = '/conversations';

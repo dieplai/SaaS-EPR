@@ -27,6 +27,16 @@ class Logger {
     _log('ERROR', message, error, stackTrace);
   }
 
+  /// Log info message (alias for i)
+  void info(String message, [Object? error, StackTrace? stackTrace]) {
+    _log('INFO', message, error, stackTrace);
+  }
+
+  /// Log error message (alias for e)
+  void error(String message, [Object? error, StackTrace? stackTrace]) {
+    _log('ERROR', message, error, stackTrace);
+  }
+
   /// Internal log method
   void _log(
     String level,

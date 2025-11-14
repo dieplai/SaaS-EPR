@@ -182,7 +182,7 @@ class ChatbotRepositoryImpl implements ChatbotRepository {
         query: query,
         onStreamChunk: onStreamChunk,
       );
-      return Right(response.message.toEntity());
+      return Right(response.toChatMessage(conversationId: conversationId).toEntity());
     } on NetworkException catch (e) {
       _logger.error('Network error: ${e.message}');
       return Left(NetworkFailure(e.message));
@@ -300,7 +300,8 @@ class ChatbotRepositoryImpl implements ChatbotRepository {
         messageId: messageId,
         onStreamChunk: onStreamChunk,
       );
-      return Right(response.message.toEntity());
+      // Use a temporary conversation ID for regenerated responses
+      return Right(response.toChatMessage(conversationId: 'temp_regen').toEntity());
     } on NetworkException catch (e) {
       _logger.error('Network error: ${e.message}');
       return Left(NetworkFailure(e.message));

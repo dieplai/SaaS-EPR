@@ -103,3 +103,15 @@ class SubscriptionExpiredException extends AppException {
 class PaymentFailedException extends AppException {
   PaymentFailedException([String message = 'Payment failed']) : super(message);
 }
+
+// ==================== REQUEST EXCEPTIONS ====================
+
+/// Rate limit exception (429)
+class RateLimitException extends AppException {
+  RateLimitException([String message = 'Rate limit exceeded']) : super(message);
+}
+
+/// Cancelled exception (request cancelled by user)
+class CancelledException extends AppException {
+  CancelledException([String message = 'Request cancelled']) : super(message);
+}

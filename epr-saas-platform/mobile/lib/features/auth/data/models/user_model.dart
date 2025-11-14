@@ -17,9 +17,14 @@ class UserModel extends User {
     super.updatedAt,
   });
 
-  /// From JSON
-  factory UserModel.fromJson(Map<String, dynamic> json) =>
-      _$UserModelFromJson(json);
+  /// From JSON - handles both 'name' and 'full_name' fields
+  factory UserModel.fromJson(Map<String, dynamic> json) {
+    // Handle both 'name' and 'full_name' from backend
+    if (!json.containsKey('name') && json.containsKey('full_name')) {
+      json = {...json, 'name': json['full_name']};
+    }
+    return _$UserModelFromJson(json);
+  }
 
   /// To JSON
   Map<String, dynamic> toJson() => _$UserModelToJson(this);
