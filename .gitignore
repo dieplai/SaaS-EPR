@@ -47,6 +47,9 @@ wheels/
 .installed.cfg
 *.egg
 
+# EXCEPTION: Don't ignore Flutter's lib directory
+!epr-saas-platform/mobile/lib/
+
 # PyCharm
 .idea/
 *.iml
