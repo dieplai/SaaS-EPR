@@ -1,0 +1,96 @@
+# Prometheus Configuration for EPR SaaS
+
+global:
+  scrape_interval: 15s # Scrape targets every 15 seconds
+  evaluation_interval: 15s # Evaluate rules every 15 seconds
+  external_labels:
+    cluster: 'epr-saas-local'
+    environment: 'development'
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093
+
+# Rule files (for alerts)
+# rule_files:
+#   - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # API Gateway
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:8000']
+        labels:
+          service: 'api-gateway'
+          language: 'golang'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # User Service
+  - job_name: 'user-service'
+    static_configs:
+      - targets: ['user-service:8001']
+        labels:
+          service: 'user-service'
+          language: 'golang'
+    metrics_path: '/metrics'
+
+  # Package Service
+  - job_name: 'package-service'
+    static_configs:
+      - targets: ['package-service:8002']
+        labels:
+          service: 'package-service'
+          language: 'golang'
+    metrics_path: '/metrics'
+
+  # Payment Service
+  - job_name: 'payment-service'
+    static_configs:
+      - targets: ['payment-service:8003']
+        labels:
+          service: 'payment-service'
+          language: 'golang'
+    metrics_path: '/metrics'
+
+  # AI Chatbot Service
+  - job_name: 'ai-chatbot'
+    static_configs:
+      - targets: ['ai-chatbot:8004']
+        labels:
+          service: 'ai-chatbot'
+          language: 'python'
+    metrics_path: '/metrics'
+
+  # PostgreSQL Exporter (if installed)
+  # - job_name: 'postgres'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']
+  #       labels:
+  #         service: 'postgresql'
+
+  # Redis Exporter (if installed)
+  # - job_name: 'redis'
+  #   static_configs:
+  #     - targets: ['redis-exporter:9121']
+  #       labels:
+  #         service: 'redis'
+
+  # Weaviate (có built-in metrics)
+  - job_name: 'weaviate'
+    static_configs:
+      - targets: ['weaviate:2112']
+        labels:
+          service: 'weaviate'
+    metrics_path: '/metrics'

@@ -1,0 +1,313 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # DATABASES & STORAGE
+  # ============================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: epr-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: epr_saas
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/migrations:/migrations
+      - ./database/seeds:/seeds
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - epr-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: epr-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - epr-network
+
+  weaviate:
+    image: semitechnologies/weaviate:1.24.4
+    container_name: epr-weaviate
+    environment:
+      QUERY_DEFAULTS_LIMIT: 20
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      DEFAULT_VECTORIZER_MODULE: 'none'  # We'll provide embeddings
+      ENABLE_MODULES: ''
+      CLUSTER_HOSTNAME: 'node1'
+    ports:
+      - "8080:8080"
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - epr-network
+
+  # MinIO - S3-compatible storage (for file uploads)
+  minio:
+    image: minio/minio:latest
+    container_name: epr-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"  # Console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - epr-network
+
+  # ============================================
+  # AI - LOCAL LLM (OLLAMA)
+  # ============================================
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: epr-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    # Tự động pull models khi start (comment out nếu không cần)
+    # command: >
+    #   sh -c "ollama pull llama3 &&
+    #          ollama pull nomic-embed-text &&
+    #          ollama serve"
+    networks:
+      - epr-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # Nếu không có GPU, comment phần deploy ở trên
+
+  # ============================================
+  # BACKEND SERVICES (sẽ build sau)
+  # ============================================
+
+  # api-gateway:
+  #   build:
+  #     context: ./api-gateway
+  #     dockerfile: Dockerfile
+  #   container_name: epr-api-gateway
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - PORT=8000
+  #     - JWT_SECRET=${JWT_SECRET}
+  #     - REDIS_URL=redis://redis:6379
+  #   depends_on:
+  #     - redis
+  #     - user-service
+  #     - package-service
+  #     - ai-chatbot
+  #   networks:
+  #     - epr-network
+
+  # user-service:
+  #   build:
+  #     context: ./services/user-service
+  #     dockerfile: Dockerfile
+  #   container_name: epr-user-service
+  #   ports:
+  #     - "8001:8001"
+  #   environment:
+  #     - PORT=8001
+  #     - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/epr_saas
+  #     - REDIS_URL=redis://redis:6379
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - epr-network
+
+  # package-service:
+  #   build:
+  #     context: ./services/package-service
+  #     dockerfile: Dockerfile
+  #   container_name: epr-package-service
+  #   ports:
+  #     - "8002:8002"
+  #   environment:
+  #     - PORT=8002
+  #     - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/epr_saas
+  #     - REDIS_URL=redis://redis:6379
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - epr-network
+
+  ai-chatbot:
+    build:
+      context: ./EPR_split_2025  # Project hiện tại
+      dockerfile: Dockerfile.new
+    container_name: epr-ai-chatbot
+    ports:
+      - "8004:8004"
+    environment:
+      - PORT=8004
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/epr_saas
+      - REDIS_URL=redis://redis:6379
+      - WEAVIATE_URL=http://weaviate:8080
+      - OLLAMA_URL=http://ollama:11434
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - USE_LOCAL_LLM=true  # true = Ollama, false = OpenAI
+    volumes:
+      - ./EPR_split_2025:/app
+      - ./documents:/app/documents
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      weaviate:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    networks:
+      - epr-network
+    command: uvicorn app:app --host 0.0.0.0 --port 8004 --reload
+
+  # ============================================
+  # MONITORING STACK
+  # ============================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: epr-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - epr-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: epr-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - epr-network
+
+  # Jaeger - Distributed Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: epr-jaeger
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"  # UI
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+    networks:
+      - epr-network
+
+  # ============================================
+  # UTILITIES
+  # ============================================
+
+  # pgAdmin - PostgreSQL GUI (optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: epr-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@epr.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - epr-network
+    profiles:
+      - tools  # Chỉ start khi: docker compose --profile tools up
+
+  # RedisInsight - Redis GUI (optional)
+  redis-insight:
+    image: redislabs/redisinsight:latest
+    container_name: epr-redis-insight
+    ports:
+      - "8001:8001"
+    depends_on:
+      - redis
+    networks:
+      - epr-network
+    profiles:
+      - tools
+
+# ============================================
+# NETWORKS
+# ============================================
+
+networks:
+  epr-network:
+    driver: bridge
+
+# ============================================
+# VOLUMES
+# ============================================
+
+volumes:
+  postgres_data:
+  redis_data:
+  weaviate_data:
+  minio_data:
+  ollama_data:
+  prometheus_data:
+  grafana_data:

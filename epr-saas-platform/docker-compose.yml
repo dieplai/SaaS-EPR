@@ -1,0 +1,293 @@
+version: '3.8'
+
+# EPR Legal SaaS - Local Development
+# Run: docker compose up -d
+
+services:
+  # ============================================
+  # DATABASE LAYER
+  # ============================================
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: epr-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-epr_saas}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/init-scripts:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - epr-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: epr-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - epr-network
+    restart: unless-stopped
+
+  # ============================================
+  # BACKEND SERVICES (Golang)
+  # ============================================
+
+  # api-gateway:
+  #   build:
+  #     context: ./backend/services/api-gateway
+  #     dockerfile: Dockerfile
+  #   container_name: epr-api-gateway
+  #   ports:
+  #     - "${API_GATEWAY_PORT:-8000}:8000"
+  #   environment:
+  #     - PORT=8000
+  #     - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-epr_saas}
+  #     - REDIS_URL=redis://redis:6379
+  #     - JWT_SECRET=${JWT_SECRET}
+  #     - USER_SERVICE_URL=http://user-service:8001
+  #     - PACKAGE_SERVICE_URL=http://package-service:8002
+  #     - AI_CHATBOT_URL=http://ai-chatbot:8004
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - epr-network
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./backend/services/api-gateway:/app:cached
+  #   command: air # Hot reload with air
+
+  # NOTE: api-gateway chưa được implement, đã comment để tránh lỗi khi build
+
+  user-service:
+    build:
+      context: ./backend/services/user-service
+      dockerfile: Dockerfile
+    container_name: epr-user-service
+    ports:
+      - "${USER_SERVICE_PORT:-8001}:8001"
+    environment:
+      - PORT=8001
+      - NODE_ENV=${NODE_ENV:-development}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-epr_saas}
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_EXPIRATION=${JWT_ACCESS_EXPIRATION:-15m}
+      - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION:-7d}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - epr-network
+    restart: unless-stopped
+
+  package-service:
+    build:
+      context: ./backend/services/package-service
+      dockerfile: Dockerfile
+    container_name: epr-package-service
+    ports:
+      - "${PACKAGE_SERVICE_PORT:-8002}:8002"
+    environment:
+      - PORT=8002
+      - NODE_ENV=${NODE_ENV:-development}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-epr_saas}
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - USER_SERVICE_URL=http://user-service:8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - epr-network
+    restart: unless-stopped
+
+  # ============================================
+  # AI SERVICE (Python FastAPI)
+  # ============================================
+
+  ai-chatbot:
+    build:
+      context: ./backend/services/ai-chatbot-service
+      dockerfile: Dockerfile
+    container_name: epr-ai-chatbot
+    ports:
+      - "${AI_CHATBOT_PORT:-8004}:8004"
+    environment:
+      - PORT=8004
+      - DEBUG=${DEBUG:-true}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-epr_saas}
+      - REDIS_URL=redis://redis:6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - LLM_MODEL=${LLM_MODEL:-gpt-3.5-turbo}
+      - JWT_SECRET=${JWT_SECRET}
+      - PACKAGE_SERVICE_URL=http://package-service:8002
+      - USER_SERVICE_URL=http://user-service:8001
+      - CHECK_QUOTA=${CHECK_QUOTA:-true}
+      - RECORD_USAGE=${RECORD_USAGE:-true}
+      - WEAVIATE_URL=${WEAVIATE_URL}
+      - WEAVIATE_API_KEY=${WEAVIATE_API_KEY}
+      - WEAVIATE_CLASS_NAME=${WEAVIATE_CLASS_NAME:-EprDocument}
+    volumes:
+      - ./backend/services/ai-chatbot-service:/app:cached
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - epr-network
+    restart: unless-stopped
+
+  # ============================================
+  # FRONTEND (Optional for local dev)
+  # ============================================
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    container_name: epr-web
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    volumes:
+      - ./web:/app:cached
+      - /app/node_modules
+    networks:
+      - epr-network
+    restart: unless-stopped
+    command: npm run dev
+    profiles:
+      - web  # Only start with: docker compose --profile web up
+
+  # ============================================
+  # MONITORING STACK
+  # ============================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: epr-prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./infrastructure/monitoring/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - epr-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: epr-grafana
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infrastructure/monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - epr-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # ============================================
+  # UTILITIES (Optional)
+  # ============================================
+
+  # pgAdmin - PostgreSQL GUI
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: epr-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@epr.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - epr-network
+    profiles:
+      - tools
+
+  # Redis Commander - Redis GUI
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: epr-redis-commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "${REDIS_COMMANDER_PORT:-8081}:8081"
+    depends_on:
+      - redis
+    networks:
+      - epr-network
+    profiles:
+      - tools
+
+# ============================================
+# NETWORKS
+# ============================================
+
+networks:
+  epr-network:
+    driver: bridge
+    name: epr-network
+
+# ============================================
+# VOLUMES
+# ============================================
+
+volumes:
+  postgres_data:
+    name: epr_postgres_data
+  redis_data:
+    name: epr_redis_data
+  prometheus_data:
+    name: epr_prometheus_data
+  grafana_data:
+    name: epr_grafana_data
+  pgadmin_data:
+    name: epr_pgadmin_data

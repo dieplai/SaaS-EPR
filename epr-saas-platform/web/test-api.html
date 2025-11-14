@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPR Legal SaaS - Testing</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #ffffff;
+            color: #1a1a1a;
+        }
+
+        .header {
+            border-bottom: 2px solid #000;
+            padding: 20px;
+            background: #fff;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            height: calc(100vh - 80px);
+        }
+
+        .sidebar {
+            border-right: 2px solid #000;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .main-content {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .section {
+            border: 1px solid #000;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #fff;
+        }
+
+        .section h2 {
+            font-size: 16px;
+            margin-bottom: 12px;
+            font-weight: 600;
+            border-bottom: 1px solid #000;
+            padding-bottom: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #000;
+            font-size: 13px;
+            background: #fff;
+        }
+
+        input:focus, select:focus {
+            outline: 2px solid #000;
+        }
+
+        button {
+            background: #000;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            margin-top: 8px;
+        }
+
+        button:hover {
+            background: #333;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .status-bar {
+            padding: 10px 15px;
+            border: 1px solid #000;
+            margin-bottom: 15px;
+            font-size: 13px;
+            background: #f8f8f8;
+        }
+
+        .status-bar.logged-in {
+            background: #e8f5e9;
+            border-color: #4caf50;
+        }
+
+        .status-bar.logged-out {
+            background: #ffebee;
+            border-color: #f44336;
+        }
+
+        /* CHAT INTERFACE */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+        }
+
+        .chat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 2px solid #000;
+            background: #f8f8f8;
+        }
+
+        .chat-header h2 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+            background: #fff;
+        }
+
+        .message {
+            display: flex;
+            margin-bottom: 20px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message.bot {
+            justify-content: flex-start;
+        }
+
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #000;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .message.bot .message-avatar {
+            background: #fff;
+            border: 2px solid #000;
+            color: #000;
+        }
+
+        .message-content {
+            max-width: 70%;
+            margin: 0 12px;
+        }
+
+        .message-bubble {
+            padding: 12px 16px;
+            border-radius: 18px;
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-bubble {
+            background: #000;
+            color: #fff;
+            border-radius: 18px 18px 4px 18px;
+        }
+
+        .message.bot .message-bubble {
+            background: #f0f0f0;
+            color: #000;
+            border: 1px solid #ddd;
+            border-radius: 18px 18px 18px 4px;
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+            padding: 0 4px;
+        }
+
+        .chat-input-container {
+            padding: 20px;
+            border-top: 2px solid #000;
+            background: #fff;
+        }
+
+        .chat-input-wrapper {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #000;
+            border-radius: 24px;
+            font-size: 14px;
+            resize: none;
+            font-family: inherit;
+            max-height: 120px;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: #000;
+        }
+
+        .send-button {
+            padding: 12px 24px;
+            border-radius: 24px;
+            background: #000;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .send-button:hover {
+            background: #333;
+        }
+
+        .send-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 12px 16px;
+            background: #f0f0f0;
+            border-radius: 18px;
+            border: 1px solid #ddd;
+            width: fit-content;
+        }
+
+        .typing-indicator.show {
+            display: block;
+        }
+
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+            margin: 0 2px;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+
+        .response-box {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            font-size: 12px;
+            font-family: monospace;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
+            border-color: #f44336;
+        }
+
+        .success {
+            color: #2e7d32;
+            background: #e8f5e9;
+            border-color: #4caf50;
+        }
+
+        .package-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .package-card {
+            border: 1px solid #000;
+            padding: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .package-card:hover {
+            background: #f8f8f8;
+        }
+
+        .package-card.selected {
+            background: #000;
+            color: #fff;
+        }
+
+        .package-card h3 {
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .package-card .price {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 8px 0;
+        }
+
+        .package-card p {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .info-box {
+            padding: 10px;
+            background: #f8f8f8;
+            border: 1px solid #000;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>EPR Legal SaaS - AI Chatbot Testing</h1>
+    </div>
+
+    <div class="container">
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+            <div id="status-bar" class="status-bar logged-out">
+                <strong>Status:</strong> Not logged in
+            </div>
+
+            <!-- ACCOUNT INFO SECTION -->
+            <div id="account-info-section" class="section" style="display: none; background: #f0f7ff; border: 2px solid #0066cc;">
+                <h2 style="color: #0066cc;">👤 Thông tin tài khoản</h2>
+
+                <div style="margin-bottom: 12px; padding: 8px; background: white; border-radius: 4px;">
+                    <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Email</div>
+                    <div id="account-email" style="font-weight: 600; color: #333;">-</div>
+                </div>
+
+                <div style="margin-bottom: 12px; padding: 8px; background: white; border-radius: 4px;">
+                    <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Họ tên</div>
+                    <div id="account-name" style="font-weight: 600; color: #333;">-</div>
+                </div>
+
+                <div style="margin-bottom: 12px; padding: 8px; background: white; border-radius: 4px;">
+                    <div style="font-size: 11px; color: #666; margin-bottom: 4px;">📦 Gói hiện tại</div>
+                    <div id="account-package" style="font-weight: 600; color: #0066cc; font-size: 16px;">-</div>
+                    <div id="account-package-price" style="font-size: 12px; color: #666; margin-top: 2px;">-</div>
+                </div>
+
+                <div style="padding: 8px; background: white; border-radius: 4px;">
+                    <div style="font-size: 11px; color: #666; margin-bottom: 4px;">⚡ Quota còn lại</div>
+                    <div id="account-quota" style="font-weight: 600; color: #28a745; font-size: 20px;">-</div>
+                    <div style="font-size: 11px; color: #666; margin-top: 4px;">
+                        <span id="account-quota-used">-</span> / <span id="account-quota-total">-</span> queries đã dùng
+                    </div>
+                </div>
+
+                <button onclick="refreshAccountInfo()" style="width: 100%; margin-top: 12px; background: #0066cc;">
+                    🔄 Làm mới
+                </button>
+            </div>
+
+            <!-- LOGIN SECTION -->
+            <div class="section">
+                <h2>Login</h2>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="login-email" placeholder="your@email.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" placeholder="password">
+                </div>
+                <button onclick="login()">Login</button>
+                <button onclick="logout()" style="background: #666;">Logout</button>
+                <div id="login-response" class="response-box" style="display: none;"></div>
+            </div>
+
+            <!-- REGISTER SECTION -->
+            <div class="section">
+                <h2>Register New User</h2>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="reg-email" placeholder="your@email.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="reg-password" placeholder="min 8 chars">
+                </div>
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="reg-fullname" placeholder="Your Name">
+                </div>
+                <button onclick="register()">Register</button>
+                <div id="reg-response" class="response-box" style="display: none;"></div>
+            </div>
+
+            <!-- SUBSCRIPTION SECTION -->
+            <div class="section">
+                <h2>Get Subscription</h2>
+                <button onclick="loadPackages()">Load Packages</button>
+                <div id="packages-grid" class="package-grid"></div>
+                <button onclick="subscribe()" style="margin-top: 10px;">Subscribe Selected</button>
+                <div id="sub-response" class="response-box" style="display: none;"></div>
+
+                <div class="info-box" style="margin-top: 15px;">
+                    <strong>Note:</strong> You need an active subscription to use the chatbot.
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN CHAT AREA -->
+        <div class="main-content">
+            <div class="chat-container">
+                <div class="chat-header">
+                    <div>
+                        <h2>AI Legal Chatbot</h2>
+                        <p style="font-size: 13px; color: #666; margin-top: 4px;">Ask questions about Vietnamese labor law</p>
+                    </div>
+                    <button onclick="newChat()" style="padding: 8px 16px; background: #0066cc; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">
+                        New Chat
+                    </button>
+                </div>
+
+                <div class="chat-messages" id="chat-messages">
+                    <div class="message bot">
+                        <div class="message-avatar">AI</div>
+                        <div class="message-content">
+                            <div class="message-bubble">
+                                Xin chào! Tôi là trợ lý pháp lý AI. Tôi có thể giúp bạn về các vấn đề liên quan đến luật lao động Việt Nam. Bạn cần tư vấn về vấn đề gì?
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chat-input-container">
+                    <div class="chat-input-wrapper">
+                        <textarea
+                            id="chat-input"
+                            class="chat-input"
+                            placeholder="Type your question here..."
+                            rows="1"
+                            onkeypress="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }"
+                        ></textarea>
+                        <button class="send-button" onclick="sendMessage()">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = 'http://localhost';
+        const USER_API = `${BASE_URL}:8001/api/v1`;
+        const PACKAGE_API = `${BASE_URL}:8002/api/v1`;
+        const AI_API = `${BASE_URL}:8004/api/v1`;
+
+        let token = localStorage.getItem('token');
+        let selectedPackageId = null;
+        let isTyping = false;
+        let chatSessionId = localStorage.getItem('chatSessionId') || generateSessionId();
+
+        // Generate unique session ID
+        function generateSessionId() {
+            const sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('chatSessionId', sessionId);
+            return sessionId;
+        }
+
+        // Update status
+        function updateStatus() {
+            const statusBar = document.getElementById('status-bar');
+            const accountInfoSection = document.getElementById('account-info-section');
+
+            if (token) {
+                statusBar.className = 'status-bar logged-in';
+                statusBar.innerHTML = '<strong>Status:</strong> ✓ Logged in';
+                accountInfoSection.style.display = 'block';
+                refreshAccountInfo(); // Load account info
+            } else {
+                statusBar.className = 'status-bar logged-out';
+                statusBar.innerHTML = '<strong>Status:</strong> ✗ Not logged in';
+                accountInfoSection.style.display = 'none';
+            }
+        }
+
+        // Refresh account info
+        async function refreshAccountInfo() {
+            if (!token) return;
+
+            try {
+                // Get user info from localStorage
+                const userEmail = localStorage.getItem('userEmail') || '-';
+                const userFullName = localStorage.getItem('userFullName') || '-';
+
+                document.getElementById('account-email').textContent = userEmail;
+                document.getElementById('account-name').textContent = userFullName;
+
+                // Get subscription info - use correct endpoint
+                const subRes = await fetch(`${PACKAGE_API}/subscriptions/me/active`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (subRes.ok) {
+                    const subData = await subRes.json();
+
+                    if (subData.success && subData.data) {
+                        const sub = subData.data;
+                        const pkg = sub.package || {};
+
+                        document.getElementById('account-package').textContent = pkg.name || '-';
+                        document.getElementById('account-package-price').textContent = pkg.price ? `$${pkg.price}/tháng` : '-';
+                        document.getElementById('account-quota').textContent = sub.remaining_queries || '0';
+
+                        const totalQueries = pkg.query_limit || 0;
+                        const usedQueries = totalQueries - (sub.remaining_queries || 0);
+                        document.getElementById('account-quota-used').textContent = usedQueries;
+                        document.getElementById('account-quota-total').textContent = totalQueries;
+
+                        // Change quota color based on remaining
+                        const quotaEl = document.getElementById('account-quota');
+                        if (sub.remaining_queries > 100) {
+                            quotaEl.style.color = '#28a745'; // Green
+                        } else if (sub.remaining_queries > 10) {
+                            quotaEl.style.color = '#ffc107'; // Yellow
+                        } else {
+                            quotaEl.style.color = '#dc3545'; // Red
+                        }
+                    } else {
+                        // No active subscription
+                        document.getElementById('account-package').textContent = 'Chưa có subscription';
+                        document.getElementById('account-package-price').textContent = 'Vui lòng đăng ký gói';
+                        document.getElementById('account-quota').textContent = '0';
+                    }
+                } else {
+                    // 404 or other error - no active subscription
+                    document.getElementById('account-package').textContent = 'Chưa có subscription';
+                    document.getElementById('account-package-price').textContent = 'Vui lòng đăng ký gói';
+                    document.getElementById('account-quota').textContent = '0';
+                }
+            } catch (err) {
+                console.error('Error refreshing account info:', err);
+            }
+        }
+
+        // Display response
+        function showResponse(elementId, message, isError = false) {
+            const el = document.getElementById(elementId);
+            el.style.display = 'block';
+            el.className = 'response-box ' + (isError ? 'error' : 'success');
+            el.textContent = typeof message === 'string' ? message : JSON.stringify(message, null, 2);
+            setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+
+        // Register
+        async function register() {
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+            const fullName = document.getElementById('reg-fullname').value;
+
+            try {
+                const res = await fetch(`${USER_API}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, full_name: fullName })
+                });
+                const data = await res.json();
+
+                if (res.ok && data.data && data.data.access_token) {
+                    token = data.data.access_token;
+                    localStorage.setItem('token', token);
+                    // Save user info
+                    localStorage.setItem('userEmail', email);
+                    localStorage.setItem('userFullName', fullName);
+                    updateStatus();
+                    showResponse('reg-response', 'Registration successful!', false);
+                    document.getElementById('login-email').value = email;
+                    document.getElementById('login-password').value = password;
+                } else {
+                    showResponse('reg-response', data, true);
+                }
+            } catch (err) {
+                showResponse('reg-response', err.message, true);
+            }
+        }
+
+        // Login
+        async function login() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                const res = await fetch(`${USER_API}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+
+                if (res.ok && data.data && data.data.access_token) {
+                    token = data.data.access_token;
+                    localStorage.setItem('token', token);
+                    // Save email (full_name will be fetched from API)
+                    localStorage.setItem('userEmail', email);
+                    updateStatus();
+                    showResponse('login-response', 'Login successful!', false);
+                } else {
+                    showResponse('login-response', data, true);
+                }
+            } catch (err) {
+                showResponse('login-response', err.message, true);
+            }
+        }
+
+        // Logout
+        function logout() {
+            token = null;
+            localStorage.removeItem('token');
+            updateStatus();
+            showResponse('login-response', 'Logged out', false);
+        }
+
+        // Load packages
+        async function loadPackages() {
+            try {
+                const res = await fetch(`${PACKAGE_API}/packages/active`);
+                const data = await res.json();
+
+                const grid = document.getElementById('packages-grid');
+                if (data.data && data.data.length > 0) {
+                    grid.innerHTML = data.data.map(pkg => `
+                        <div class="package-card" onclick="selectPackage('${pkg.id}', this)">
+                            <h3>${pkg.name}</h3>
+                            <div class="price">$${pkg.price}</div>
+                            <p>${pkg.query_limit} queries</p>
+                        </div>
+                    `).join('');
+                } else {
+                    grid.innerHTML = '<p>No packages available</p>';
+                }
+            } catch (err) {
+                showResponse('sub-response', err.message, true);
+            }
+        }
+
+        // Select package
+        function selectPackage(packageId, element) {
+            document.querySelectorAll('.package-card').forEach(el => el.classList.remove('selected'));
+            element.classList.add('selected');
+            selectedPackageId = packageId;
+        }
+
+        // Subscribe
+        async function subscribe() {
+            if (!token) {
+                showResponse('sub-response', 'Please login first', true);
+                return;
+            }
+            if (!selectedPackageId) {
+                showResponse('sub-response', 'Please select a package', true);
+                return;
+            }
+
+            try {
+                const res = await fetch(`${PACKAGE_API}/subscriptions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ package_id: selectedPackageId })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    showResponse('sub-response', 'Subscription successful!', false);
+                    // Refresh account info to show new subscription
+                    setTimeout(() => refreshAccountInfo(), 500);
+                } else {
+                    showResponse('sub-response', data, true);
+                }
+            } catch (err) {
+                showResponse('sub-response', err.message, true);
+            }
+        }
+
+        // Add message to chat
+        function addMessage(content, type, sources = null) {
+            const messagesDiv = document.getElementById('chat-messages');
+            const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+            // Format sources/citations if available
+            let citationsHtml = '';
+            if (sources && sources.length > 0) {
+                citationsHtml = '<div style="margin-top: 16px; padding: 12px; background: #f8f9fa; border-left: 3px solid #0066cc; border-radius: 4px;">';
+                citationsHtml += '<div style="font-weight: 600; margin-bottom: 8px; color: #0066cc;">📚 Trích dẫn nguồn:</div>';
+
+                sources.forEach((source, idx) => {
+                    const metadata = source.metadata || {};
+                    const docName = metadata.document || metadata.file_name || 'Nghị định 08/2022/NĐ-CP';
+                    const dieu = metadata.dieu ? `Điều ${metadata.dieu}` : 'Điều luật';
+                    const dieuTitle = metadata.dieu_title || '';
+                    const chuong = metadata.chuong ? `Chương ${metadata.chuong}` : '';
+                    const chuongTitle = metadata.chuong_title || '';
+                    const pages = metadata.pages ? `Trang ${metadata.pages}` : '';
+                    const sourceText = source.text || '';
+                    const pdfUrl = metadata.pdf_url || metadata.file_name;
+
+                    citationsHtml += `<div style="margin-top: 8px; padding: 8px; background: white; border-radius: 4px; font-size: 13px;">`;
+
+                    // Title line
+                    let titleLine = `[${idx + 1}] ${dieu}`;
+                    if (dieuTitle) titleLine += `: ${dieuTitle}`;
+                    citationsHtml += `<div style="font-weight: 600; color: #333; margin-bottom: 4px;">${titleLine}</div>`;
+
+                    // Chapter info if available
+                    if (chuong) {
+                        citationsHtml += `<div style="font-size: 11px; color: #666; margin-bottom: 4px;">${chuong}${chuongTitle ? ': ' + chuongTitle : ''}</div>`;
+                    }
+
+                    // Source text excerpt
+                    if (sourceText) {
+                        const excerpt = sourceText.length > 300 ? sourceText.substring(0, 300) + '...' : sourceText;
+                        citationsHtml += `<div style="color: #666; font-style: italic; margin: 6px 0; padding: 8px; background: #f9f9f9; border-left: 3px solid #0066cc; border-radius: 2px;">"${excerpt}"</div>`;
+                    }
+
+                    // Document info
+                    citationsHtml += `<div style="color: #888; font-size: 12px; margin-top: 4px;">`;
+                    citationsHtml += `📄 <strong>${docName}</strong>`;
+                    if (pages) citationsHtml += ` • ${pages}`;
+
+                    // PDF link (placeholder for now since metadata might not have it)
+                    if (pdfUrl && pdfUrl !== 'Nghị định 08/2022/NĐ-CP') {
+                        citationsHtml += ` • <a href="${pdfUrl}" target="_blank" style="color: #0066cc; text-decoration: none;">Xem PDF →</a>`;
+                    }
+                    citationsHtml += `</div></div>`;
+                });
+
+                citationsHtml += '</div>';
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.innerHTML = `
+                <div class="message-avatar">${type === 'user' ? 'U' : 'AI'}</div>
+                <div class="message-content">
+                    <div class="message-bubble">${content}${citationsHtml}</div>
+                    <div class="message-time">${time}</div>
+                </div>
+            `;
+
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Send message
+        async function sendMessage() {
+            if (!token) {
+                alert('Please login first!');
+                return;
+            }
+
+            const input = document.getElementById('chat-input');
+            const query = input.value.trim();
+            if (!query || isTyping) return;
+
+            // Add user message
+            addMessage(query, 'user');
+            input.value = '';
+            input.style.height = 'auto';
+
+            // Show typing
+            isTyping = true;
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message bot';
+            typingDiv.innerHTML = `
+                <div class="message-avatar">AI</div>
+                <div class="message-content">
+                    <div class="typing-indicator show">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            `;
+            document.getElementById('chat-messages').appendChild(typingDiv);
+
+            try {
+                const res = await fetch(`${AI_API}/query`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        query,
+                        session_id: chatSessionId
+                    })
+                });
+
+                const data = await res.json();
+                typingDiv.remove();
+
+                if (res.ok) {
+                    // Handle different response formats
+                    let answer = data.answer || data.response || JSON.stringify(data, null, 2);
+                    let sources = data.sources || [];
+
+                    // Debug: log sources to console
+                    console.log('API Response:', data);
+                    console.log('Sources:', sources);
+
+                    // Add message with sources/citations
+                    addMessage(answer, 'bot', sources);
+
+                    // Refresh quota after successful query
+                    setTimeout(() => refreshAccountInfo(), 1000);
+                } else {
+                    // Handle error responses with better UX
+                    let errorMessage = data.detail || JSON.stringify(data);
+
+                    // Check if token expired (401 error)
+                    if (res.status === 401) {
+                        // Auto logout
+                        token = null;
+                        localStorage.removeItem('token');
+                        updateStatus();
+
+                        // Show user-friendly error with login prompt
+                        errorMessage = `
+                            <div style="color: #d32f2f;">
+                                <strong>⚠️ ${errorMessage}</strong>
+                            </div>
+                            <div style="margin-top: 8px; padding: 8px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">
+                                💡 <strong>Hành động:</strong> Vui lòng đăng nhập lại ở phần bên trái để tiếp tục sử dụng.
+                            </div>
+                        `;
+                    } else if (res.status === 403) {
+                        // Quota or subscription error
+                        errorMessage = `
+                            <div style="color: #d32f2f;">
+                                <strong>⚠️ ${errorMessage}</strong>
+                            </div>
+                            <div style="margin-top: 8px; padding: 8px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">
+                                💡 <strong>Hành động:</strong> Vui lòng kiểm tra gói subscription hoặc quota của bạn.
+                            </div>
+                        `;
+                    } else {
+                        // Other errors
+                        errorMessage = `<div style="color: #d32f2f;"><strong>❌ Lỗi:</strong> ${errorMessage}</div>`;
+                    }
+
+                    addMessage(errorMessage, 'bot');
+                }
+            } catch (err) {
+                typingDiv.remove();
+                addMessage(`Error: ${err.message}`, 'bot');
+            }
+
+            isTyping = false;
+        }
+
+        // New Chat - Clear history and start new session
+        function newChat() {
+            // Generate new session ID
+            chatSessionId = generateSessionId();
+
+            // Clear chat messages
+            const messagesDiv = document.getElementById('chat-messages');
+            messagesDiv.innerHTML = `
+                <div class="message bot">
+                    <div class="message-avatar">AI</div>
+                    <div class="message-content">
+                        <div class="message-bubble">
+                            Xin chào! Tôi là trợ lý pháp lý AI. Tôi có thể giúp bạn về các vấn đề liên quan đến luật lao động Việt Nam. Bạn cần tư vấn về vấn đề gì?
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Clear input
+            document.getElementById('chat-input').value = '';
+        }
+
+        // Auto-resize textarea
+        document.getElementById('chat-input').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        // Initialize
+        updateStatus();
+    </script>
+</body>
+</html>

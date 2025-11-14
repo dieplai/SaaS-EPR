@@ -1,0 +1,22 @@
+fastapi
+uvicorn[standard]
+python-dotenv==1.0.0
+httpx
+pydantic>=2.0
+pydantic-settings
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.6
+
+# LlamaIndex & RAG - using newer versions with Pydantic v2 support
+llama-index-core
+llama-index
+llama-index-llms-openai
+llama-index-embeddings-openai
+llama-index-vector-stores-weaviate
+openai
+
+# Vector DB - newer version compatible with llama-index
+weaviate-client>=4.0.0
+
+# Production server
+gunicorn==22.0.0

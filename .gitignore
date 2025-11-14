@@ -1,0 +1,262 @@
+# ============================================
+# EPR Legal SaaS - .gitignore
+# ============================================
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.crt
+
+# API Keys & Credentials
+**/secrets/
+credentials.json
+service-account.json
+
+# ============================================
+# PYTHON
+# ============================================
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyCharm
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ============================================
+# GOLANG
+# ============================================
+
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+tmp/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Vendor
+vendor/
+
+# ============================================
+# DOCKER
+# ============================================
+
+# Docker volumes (if not using named volumes)
+*.docker/
+docker-compose.override.yml
+
+# ============================================
+# DATABASES
+# ============================================
+
+# PostgreSQL
+*.sql.bak
+pgdata/
+postgres_data/
+
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# Backups
+backups/*.sql
+!backups/.gitkeep
+
+# ============================================
+# LOGS
+# ============================================
+
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ============================================
+# OS
+# ============================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# Linux
+*~
+.directory
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ============================================
+# EDITORS
+# ============================================
+
+# Vim
+*.swp
+*.swo
+*.swn
+*.bak
+*~
+
+# Emacs
+\#*\#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ============================================
+# NODE.JS (for frontend if added)
+# ============================================
+
+node_modules/
+npm-debug.log
+yarn-error.log
+.pnpm-debug.log
+
+# Next.js
+.next/
+out/
+
+# ============================================
+# MONITORING & OBSERVABILITY
+# ============================================
+
+# Prometheus
+prometheus_data/
+
+# Grafana
+grafana_data/
+
+# Jaeger
+jaeger_data/
+
+# ============================================
+# AI/ML
+# ============================================
+
+# Ollama models (large files)
+ollama_data/
+
+# Weaviate data
+weaviate_data/
+
+# Vector embeddings cache
+embeddings_cache/
+.vector_cache/
+
+# Model checkpoints
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# ============================================
+# TEMPORARY FILES
+# ============================================
+
+tmp/
+temp/
+*.tmp
+*.temp
+.cache/
+
+# ============================================
+# BUILD ARTIFACTS
+# ============================================
+
+*.o
+*.a
+*.lib
+*.ko
+*.obj
+*.elf
+
+# ============================================
+# PROJECT SPECIFIC
+# ============================================
+
+# Document uploads (keep originals in git, not uploads)
+uploads/
+documents/uploads/
+
+# Generated files
+generated/
+*.generated.*
+
+# Test outputs
+test-results/
+coverage/
+
+# Local development databases
+local.db
+dev.db
+
+# ============================================
+# KEEP THESE DIRECTORIES
+# ============================================
+
+!documents/*.pdf
+!database/migrations/*.sql
+!database/seeds/*.sql
+!monitoring/**/*.yml
+!monitoring/**/*.json
