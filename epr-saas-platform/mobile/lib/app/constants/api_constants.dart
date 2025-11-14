@@ -52,6 +52,8 @@ class ApiConstants {
   static const String changePassword = '/users/me/password';
 
   // ==================== CHATBOT ENDPOINTS ====================
+
+  // Conversations
   /// Create conversation
   static const String createConversation = '/conversations';
 
@@ -59,11 +61,21 @@ class ApiConstants {
   static const String getConversations = '/conversations';
 
   /// Get conversation by ID
-  static String getConversationById(String id) => '/conversations/$id';
+  static const String getConversationById = '/conversations';
+
+  /// Update conversation
+  static const String updateConversation = '/conversations';
 
   /// Delete conversation
-  static String deleteConversation(String id) => '/conversations/$id';
+  static const String deleteConversation = '/conversations';
 
+  /// Search conversations
+  static const String searchConversations = '/conversations/search';
+
+  /// Get conversation statistics
+  static const String getConversationStats = '/conversations/stats';
+
+  // Messages
   /// Send query/message
   static const String sendQuery = '/chat/query';
 
@@ -71,11 +83,23 @@ class ApiConstants {
   static const String streamChat = '/chat/stream';
 
   /// Get chat history
-  static String getChatHistory(String conversationId) =>
-      '/conversations/$conversationId/messages';
+  static const String getChatHistory = '/conversations';
 
-  /// Get citations
-  static String getCitations(String messageId) => '/messages/$messageId/citations';
+  /// Get message by ID
+  static const String getMessage = '/messages';
+
+  /// Delete message
+  static const String deleteMessage = '/messages';
+
+  /// Regenerate AI response
+  static const String regenerateResponse = '/messages';
+
+  // Citations
+  /// Get citations for a message
+  static const String getCitations = '/messages';
+
+  /// Get citation by ID
+  static const String getCitation = '/citations';
 
   // ==================== PACKAGE/SUBSCRIPTION ENDPOINTS ====================
   /// Get all packages

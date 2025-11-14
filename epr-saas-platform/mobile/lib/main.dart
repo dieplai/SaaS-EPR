@@ -8,6 +8,8 @@ import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/auth/presentation/screens/splash_screen.dart';
 import 'features/auth/presentation/screens/login_screen.dart';
 import 'features/auth/presentation/screens/register_screen.dart';
+import 'features/chatbot/presentation/providers/chatbot_provider.dart';
+import 'features/chatbot/presentation/screens/chat_screen.dart';
 
 void main() async {
   // Ensure Flutter bindings are initialized
@@ -40,8 +42,11 @@ class EPRLegalApp extends StatelessWidget {
         ChangeNotifierProvider<AuthProvider>(
           create: (_) => getIt<AuthProvider>(),
         ),
+        // Chatbot Provider
+        ChangeNotifierProvider<ChatbotProvider>(
+          create: (_) => getIt<ChatbotProvider>(),
+        ),
         // TODO: Add more providers here when implementing other features
-        // - ChatbotProvider
         // - SubscriptionProvider
         // - ProfileProvider
       ],
@@ -61,9 +66,9 @@ class EPRLegalApp extends StatelessWidget {
           '/': (context) => const SplashScreen(),
           '/login': (context) => const LoginScreen(),
           '/register': (context) => const RegisterScreen(),
+          '/chat': (context) => const ChatScreen(),
           // TODO: Add more routes when implementing other features
           // '/main': (context) => const MainScreen(),
-          // '/chat': (context) => const ChatScreen(),
         },
       ),
     );

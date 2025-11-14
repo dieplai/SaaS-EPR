@@ -110,6 +110,13 @@ class QuotaExceededFailure extends Failure {
       : super(message);
 }
 
+/// Rate limit exceeded failure (429)
+class RateLimitFailure extends Failure {
+  const RateLimitFailure(
+      [String message = 'Bạn đang gửi yêu cầu quá nhanh. Vui lòng chờ một chút.'])
+      : super(message);
+}
+
 // ==================== SUBSCRIPTION FAILURES ====================
 
 /// Subscription expired failure
