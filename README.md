@@ -865,3 +865,4 @@ MIT License - see [LICENSE](./LICENSE)
 ---
 
 **Built with ❤️ for learning and production use**
+# CI/CD Pipeline Ready
