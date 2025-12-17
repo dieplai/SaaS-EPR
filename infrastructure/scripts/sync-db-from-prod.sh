@@ -23,9 +23,34 @@ echo -e "${GREEN}========================================${NC}"
 
 # Check if containers are running
 if ! docker ps | grep -q epr-postgres; then
-  echo -e "${RED}Error: PostgreSQL container not running${NC}"
+  echo -e "${RED}ERROR: PostgreSQL container not running${NC}"
   exit 1
 fi
+
+# Check if production database exists and has data
+echo -e "${YELLOW}Checking production database status${NC}"
+
+# Check if database exists
+DB_EXISTS=$(docker exec epr-postgres psql -U postgres -t -c "SELECT 1 FROM pg_database WHERE datname='epr_saas_production';" 2>/dev/null | xargs || echo "0")
+
+if [ "$DB_EXISTS" != "1" ]; then
+  echo -e "${YELLOW}INFO: Production database does not exist yet${NC}"
+  echo -e "${YELLOW}INFO: Skipping database sync (first deployment)${NC}"
+  echo -e "${GREEN}========================================${NC}"
+  exit 0
+fi
+
+# Check if production database has tables
+PROD_TABLE_COUNT=$(docker exec epr-postgres psql -U epr_prod -d epr_saas_production -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';" 2>/dev/null | xargs || echo "0")
+
+if [ "$PROD_TABLE_COUNT" -eq 0 ]; then
+  echo -e "${YELLOW}INFO: Production database is empty (no tables)${NC}"
+  echo -e "${YELLOW}INFO: Skipping database sync${NC}"
+  echo -e "${GREEN}========================================${NC}"
+  exit 0
+fi
+
+echo -e "${GREEN}OK: Production database found with $PROD_TABLE_COUNT tables${NC}"
 
 # Step 1: Dump production database
 echo -e "${YELLOW}[1/4] Dumping production database${NC}"
