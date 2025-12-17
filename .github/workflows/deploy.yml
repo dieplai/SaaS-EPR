@@ -110,8 +110,9 @@ jobs:
             # Navigate to project directory
             cd ${{ secrets.VPS_PROJECT_PATH || '/opt/epr-saas' }}
 
-            # Pull latest code
-            git pull --rebase origin main
+            # Pull latest code (auto-resolve conflicts)
+            git fetch origin
+            git reset --hard origin/main
 
             # Database operations (backup for prod, sync for staging)
             if [ "$DEPLOY_ENV" == "production" ]; then
