@@ -51,7 +51,16 @@ REQUIRED_SECRETS=(
   "QDRANT_CLOUD_URL"
 )
 
-echo -e "${YELLOW}[1/5] Validating environment secrets${NC}"
+# Pre-flight checks
+echo -e "${YELLOW}[1/7] Running pre-flight checks${NC}"
+if "$PROJECT_ROOT/infrastructure/scripts/preflight-check.sh" "$ENV"; then
+  echo -e "${GREEN}OK: Pre-flight checks passed${NC}"
+else
+  echo -e "${RED}ERROR: Pre-flight checks failed${NC}"
+  exit 1
+fi
+
+echo -e "${YELLOW}[2/7] Validating environment secrets${NC}"
 for secret in "${REQUIRED_SECRETS[@]}"; do
   if [ -z "${!secret}" ]; then
     echo -e "${RED}ERROR: Required secret $secret is not set${NC}"
@@ -61,7 +70,7 @@ done
 echo -e "${GREEN}OK: All required secrets validated${NC}"
 
 # Generate .env from template
-echo -e "${YELLOW}[2/5] Generating environment configuration${NC}"
+echo -e "${YELLOW}[3/7] Generating environment configuration${NC}"
 envsubst < "$TEMPLATE_FILE" > "$ENV_FILE"
 echo -e "${GREEN}OK: Environment file generated at $ENV_FILE${NC}"
 
@@ -69,42 +78,37 @@ echo -e "${GREEN}OK: Environment file generated at $ENV_FILE${NC}"
 export DEPLOY_ENV="$ENV"
 
 # Pull latest images
-echo -e "${YELLOW}[3/5] Pulling Docker images from registry${NC}"
+echo -e "${YELLOW}[4/7] Pulling Docker images from registry${NC}"
 cd "$PROJECT_ROOT"
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file ".env.$ENV" pull
 echo -e "${GREEN}OK: Images pulled successfully${NC}"
 
 # Deploy
-echo -e "${YELLOW}[4/5] Deploying services${NC}"
+echo -e "${YELLOW}[5/7] Deploying services${NC}"
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file ".env.$ENV" up -d --remove-orphans
 echo -e "${GREEN}OK: Services deployed${NC}"
 
-# Wait for services
-echo -e "${YELLOW}[5/5] Running health checks${NC}"
-sleep 10
-
-# Health check
-BACKEND_HEALTHY=false
-CHATBOT_HEALTHY=false
-
-if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
-  echo -e "${GREEN}OK: Backend service is healthy${NC}"
-  BACKEND_HEALTHY=true
+# Health checks
+echo -e "${YELLOW}[6/7] Running health checks${NC}"
+if "$PROJECT_ROOT/infrastructure/scripts/health-check.sh"; then
+  echo -e "${GREEN}OK: Health checks passed${NC}"
 else
-  echo -e "${RED}WARNING: Backend health check failed${NC}"
+  echo -e "${RED}ERROR: Health checks failed - rolling back${NC}"
+  "$PROJECT_ROOT/infrastructure/scripts/rollback.sh" "$ENV"
+  exit 1
 fi
 
-if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
-  echo -e "${GREEN}OK: Chatbot API service is healthy${NC}"
-  CHATBOT_HEALTHY=true
+# Smoke tests
+echo -e "${YELLOW}[7/7] Running smoke tests${NC}"
+if "$PROJECT_ROOT/infrastructure/scripts/smoke-test.sh"; then
+  echo -e "${GREEN}OK: Smoke tests passed${NC}"
 else
-  echo -e "${RED}WARNING: Chatbot API health check failed${NC}"
+  echo -e "${RED}ERROR: Smoke tests failed - rolling back${NC}"
+  "$PROJECT_ROOT/infrastructure/scripts/rollback.sh" "$ENV"
+  exit 1
 fi
 
 echo -e "${GREEN}========================================${NC}"
-if [ "$BACKEND_HEALTHY" = true ] && [ "$CHATBOT_HEALTHY" = true ]; then
-  echo -e "${GREEN}Deployment completed successfully${NC}"
-else
-  echo -e "${YELLOW}Deployment completed with warnings - check service logs${NC}"
-fi
+echo -e "${GREEN}Deployment completed successfully${NC}"
+echo -e "${GREEN}All checks passed${NC}"
 echo -e "${GREEN}========================================${NC}"
