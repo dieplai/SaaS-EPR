@@ -20,7 +20,7 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="$BACKUP_DIR/production_db_backup_$TIMESTAMP.sql"
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}Production DB Backup${NC}"
+echo -e "${GREEN}Database Backup - Production${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 # Create backup directory
@@ -33,7 +33,7 @@ if ! docker ps | grep -q epr-postgres; then
 fi
 
 # Backup database
-echo -e "${YELLOW}Backing up production database...${NC}"
+echo -e "${YELLOW}Creating database dump${NC}"
 docker exec epr-postgres pg_dump \
   -U epr_prod \
   -d epr_saas_production \
@@ -43,24 +43,25 @@ docker exec epr-postgres pg_dump \
   --no-acl > "$BACKUP_FILE"
 
 if [ $? -eq 0 ]; then
-  echo -e "${GREEN}✓ Backup saved: $BACKUP_FILE${NC}"
+  echo -e "${GREEN}OK: Backup saved to $BACKUP_FILE${NC}"
 
   # Compress backup
+  echo -e "${YELLOW}Compressing backup${NC}"
   gzip "$BACKUP_FILE"
-  echo -e "${GREEN}✓ Compressed: $BACKUP_FILE.gz${NC}"
+  echo -e "${GREEN}OK: Backup compressed${NC}"
 
   # Cleanup old backups (keep only latest 1)
-  echo -e "${YELLOW}Cleaning up old backups...${NC}"
+  echo -e "${YELLOW}Cleaning up old backups${NC}"
   cd "$BACKUP_DIR"
   ls -t production_db_backup_*.sql.gz 2>/dev/null | tail -n +2 | xargs -r rm -f
 
   BACKUP_COUNT=$(ls -1 production_db_backup_*.sql.gz 2>/dev/null | wc -l)
-  echo -e "${GREEN}✓ Keeping ${BACKUP_COUNT} latest backup(s)${NC}"
+  echo -e "${GREEN}OK: Keeping ${BACKUP_COUNT} latest backup${NC}"
 else
-  echo -e "${RED}✗ Backup failed${NC}"
+  echo -e "${RED}ERROR: Backup failed${NC}"
   exit 1
 fi
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}✓ Backup completed!${NC}"
+echo -e "${GREEN}Backup completed successfully${NC}"
 echo -e "${GREEN}========================================${NC}"

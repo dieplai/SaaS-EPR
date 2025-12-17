@@ -111,17 +111,17 @@ jobs:
             cd ${{ secrets.VPS_PROJECT_PATH || '/opt/epr-saas' }}
 
             # Pull latest code
-            git pull origin main
+            git pull --rebase origin main
 
             # Database operations (backup for prod, sync for staging)
             if [ "$DEPLOY_ENV" == "production" ]; then
-              echo "📦 Backing up production database..."
+              echo "[INFO] Backing up production database"
               ./infrastructure/scripts/backup-db.sh
 
-              echo "🧹 Cleaning up old Docker images..."
+              echo "[INFO] Cleaning up old Docker images"
               ./infrastructure/scripts/cleanup-docker.sh
             elif [ "$DEPLOY_ENV" == "staging" ]; then
-              echo "🔄 Syncing staging DB from production..."
+              echo "[INFO] Syncing staging database from production"
               ./infrastructure/scripts/sync-db-from-prod.sh
             fi
 

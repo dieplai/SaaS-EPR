@@ -26,7 +26,7 @@ TEMPLATE_FILE="$PROJECT_ROOT/infrastructure/.env.$ENV.template"
 ENV_FILE="$PROJECT_ROOT/.env.$ENV"
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}EPR SaaS - Deploy to $ENV${NC}"
+echo -e "${GREEN}EPR SaaS Deployment - Environment: $ENV${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 # Validate environment
@@ -51,50 +51,60 @@ REQUIRED_SECRETS=(
   "QDRANT_CLOUD_URL"
 )
 
-echo -e "${YELLOW}Validating secrets...${NC}"
+echo -e "${YELLOW}[1/5] Validating environment secrets${NC}"
 for secret in "${REQUIRED_SECRETS[@]}"; do
   if [ -z "${!secret}" ]; then
-    echo -e "${RED}Error: Required secret $secret is not set${NC}"
+    echo -e "${RED}ERROR: Required secret $secret is not set${NC}"
     exit 1
   fi
 done
-echo -e "${GREEN}✓ All required secrets are set${NC}"
+echo -e "${GREEN}OK: All required secrets validated${NC}"
 
 # Generate .env from template
-echo -e "${YELLOW}Generating .env.$ENV from template...${NC}"
+echo -e "${YELLOW}[2/5] Generating environment configuration${NC}"
 envsubst < "$TEMPLATE_FILE" > "$ENV_FILE"
-echo -e "${GREEN}✓ Generated: $ENV_FILE${NC}"
+echo -e "${GREEN}OK: Environment file generated at $ENV_FILE${NC}"
 
 # Set DEPLOY_ENV for docker-compose
 export DEPLOY_ENV="$ENV"
 
 # Pull latest images
-echo -e "${YELLOW}Pulling latest Docker images...${NC}"
+echo -e "${YELLOW}[3/5] Pulling Docker images from registry${NC}"
 cd "$PROJECT_ROOT"
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file ".env.$ENV" pull
+echo -e "${GREEN}OK: Images pulled successfully${NC}"
 
 # Deploy
-echo -e "${YELLOW}Deploying services...${NC}"
+echo -e "${YELLOW}[4/5] Deploying services${NC}"
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file ".env.$ENV" up -d --remove-orphans
+echo -e "${GREEN}OK: Services deployed${NC}"
 
 # Wait for services
-echo -e "${YELLOW}Waiting for services to be healthy...${NC}"
+echo -e "${YELLOW}[5/5] Running health checks${NC}"
 sleep 10
 
 # Health check
-echo -e "${YELLOW}Checking service health...${NC}"
+BACKEND_HEALTHY=false
+CHATBOT_HEALTHY=false
+
 if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
-  echo -e "${GREEN}✓ Backend is healthy${NC}"
+  echo -e "${GREEN}OK: Backend service is healthy${NC}"
+  BACKEND_HEALTHY=true
 else
-  echo -e "${RED}✗ Backend health check failed${NC}"
+  echo -e "${RED}WARNING: Backend health check failed${NC}"
 fi
 
 if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
-  echo -e "${GREEN}✓ Chatbot API is healthy${NC}"
+  echo -e "${GREEN}OK: Chatbot API service is healthy${NC}"
+  CHATBOT_HEALTHY=true
 else
-  echo -e "${RED}✗ Chatbot API health check failed${NC}"
+  echo -e "${RED}WARNING: Chatbot API health check failed${NC}"
 fi
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}✓ Deployment completed!${NC}"
+if [ "$BACKEND_HEALTHY" = true ] && [ "$CHATBOT_HEALTHY" = true ]; then
+  echo -e "${GREEN}Deployment completed successfully${NC}"
+else
+  echo -e "${YELLOW}Deployment completed with warnings - check service logs${NC}"
+fi
 echo -e "${GREEN}========================================${NC}"
