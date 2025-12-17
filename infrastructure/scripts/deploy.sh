@@ -65,8 +65,7 @@ echo -e "${YELLOW}Generating .env.$ENV from template...${NC}"
 envsubst < "$TEMPLATE_FILE" > "$ENV_FILE"
 echo -e "${GREEN}✓ Generated: $ENV_FILE${NC}"
 
-# Set GITHUB_REPOSITORY and DEPLOY_ENV for docker-compose
-export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(git remote get-url origin | sed 's/.*github.com[:/]\(.*\)\.git/\1/')}"
+# Set DEPLOY_ENV for docker-compose
 export DEPLOY_ENV="$ENV"
 
 # Pull latest images

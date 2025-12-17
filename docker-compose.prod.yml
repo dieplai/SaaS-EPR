@@ -10,23 +10,23 @@ services:
   # BACKEND - Pull from GHCR
   # ============================================
   epr-backend:
-    image: ghcr.io/${GITHUB_REPOSITORY:-your-org/epr-saas-platform}-backend:${DEPLOY_ENV:-staging}
+    image: ghcr.io/dieplai/saas-epr-backend:${DEPLOY_ENV:-staging}
     build: null  # Disable build, use pre-built image
 
   # ============================================
   # CHATBOT - Pull from GHCR
   # ============================================
   ai-chatbot-api:
-    image: ghcr.io/${GITHUB_REPOSITORY:-your-org/epr-saas-platform}-chatbot:${DEPLOY_ENV:-staging}
+    image: ghcr.io/dieplai/saas-epr-chatbot:${DEPLOY_ENV:-staging}
     build: null
 
   ai-chatbot-ui:
-    image: ghcr.io/${GITHUB_REPOSITORY:-your-org/epr-saas-platform}-chatbot:${DEPLOY_ENV:-staging}
+    image: ghcr.io/dieplai/saas-epr-chatbot:${DEPLOY_ENV:-staging}
     build: null
 
   # ============================================
   # WEB FRONTEND - Pull from GHCR
   # ============================================
   web-frontend:
-    image: ghcr.io/${GITHUB_REPOSITORY:-your-org/epr-saas-platform}-web:${DEPLOY_ENV:-staging}
+    image: ghcr.io/dieplai/saas-epr-web:${DEPLOY_ENV:-staging}
     build: null
