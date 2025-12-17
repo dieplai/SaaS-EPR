@@ -32,17 +32,20 @@ fi
 
 echo -e "${YELLOW}Setting up databases and users${NC}"
 
-# Execute idempotent database setup
+# Execute truly idempotent database setup
 docker exec -i epr-postgres psql -U postgres postgres <<EOF
 -- Create production database if not exists
 SELECT 'CREATE DATABASE epr_saas_production'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'epr_saas_production')\gexec
 
--- Create production user if not exists
+-- Create production user if not exists, then ALWAYS update password
 DO \$\$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'epr_prod') THEN
     CREATE USER epr_prod WITH PASSWORD '${POSTGRES_PASSWORD}';
+  ELSE
+    -- User exists, update password (sync with GitHub Secret)
+    ALTER USER epr_prod WITH PASSWORD '${POSTGRES_PASSWORD}';
   END IF;
 END
 \$\$;
@@ -54,11 +57,14 @@ GRANT ALL PRIVILEGES ON DATABASE epr_saas_production TO epr_prod;
 SELECT 'CREATE DATABASE epr_saas_staging'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'epr_saas_staging')\gexec
 
--- Create staging user if not exists
+-- Create staging user if not exists, then ALWAYS update password
 DO \$\$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'epr_staging') THEN
     CREATE USER epr_staging WITH PASSWORD '${POSTGRES_PASSWORD}';
+  ELSE
+    -- User exists, update password (sync with GitHub Secret)
+    ALTER USER epr_staging WITH PASSWORD '${POSTGRES_PASSWORD}';
   END IF;
 END
 \$\$;
