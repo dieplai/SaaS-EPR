@@ -43,9 +43,9 @@ jobs:
 
       - name: Environment info
         run: |
-          echo "🚀 Deploying to: ${{ steps.env.outputs.name }}"
-          echo "📦 Repository: ${{ github.repository }}"
-          echo "🔖 SHA: ${{ github.sha }}"
+          echo "[INFO] Deploying to: ${{ steps.env.outputs.name }}"
+          echo "[INFO] Repository: ${{ github.repository }}"
+          echo "[INFO] Commit SHA: ${{ github.sha }}"
 
       # ============================================
       # 2. Checkout Code
@@ -145,11 +145,13 @@ jobs:
       - name: Deployment summary
         if: always()
         run: |
-          echo "## Deployment Summary 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment**: ${{ steps.env.outputs.name }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Images**:" >> $GITHUB_STEP_SUMMARY
-          echo "  - Backend: \`${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ steps.env.outputs.name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "  - Chatbot: \`${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-chatbot:${{ steps.env.outputs.name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "  - Web: \`${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-web:${{ steps.env.outputs.name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ steps.env.outputs.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Docker Images:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend: \`${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ steps.env.outputs.name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Chatbot: \`${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-chatbot:${{ steps.env.outputs.name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Web: \`${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-web:${{ steps.env.outputs.name }}\`" >> $GITHUB_STEP_SUMMARY
