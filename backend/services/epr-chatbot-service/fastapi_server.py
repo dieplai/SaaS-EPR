@@ -274,6 +274,11 @@ async def chat_ui():
         return FileResponse(static_file)
     return {"message": "Chat UI not available"}
 
+@app.get("/health")
+async def health():
+    """Simple health check endpoint for monitoring"""
+    return {"status": "ok", "service": "epr-chatbot-service"}
+
 # ==========================================
 # 📋 PYDANTIC MODELS
 # ==========================================

@@ -84,12 +84,21 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file ".env
 echo -e "${GREEN}OK: Images pulled successfully${NC}"
 
 # Deploy
-echo -e "${YELLOW}[5/7] Deploying services${NC}"
+echo -e "${YELLOW}[5/8] Deploying services${NC}"
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file ".env.$ENV" up -d --remove-orphans
 echo -e "${GREEN}OK: Services deployed${NC}"
 
+# Database setup (idempotent - safe to run multiple times)
+echo -e "${YELLOW}[6/8] Setting up databases${NC}"
+if "$PROJECT_ROOT/infrastructure/scripts/setup-database.sh"; then
+  echo -e "${GREEN}OK: Database setup completed${NC}"
+else
+  echo -e "${RED}ERROR: Database setup failed${NC}"
+  exit 1
+fi
+
 # Health checks
-echo -e "${YELLOW}[6/7] Running health checks${NC}"
+echo -e "${YELLOW}[7/8] Running health checks${NC}"
 if "$PROJECT_ROOT/infrastructure/scripts/health-check.sh"; then
   echo -e "${GREEN}OK: Health checks passed${NC}"
 else
@@ -99,7 +108,7 @@ else
 fi
 
 # Smoke tests
-echo -e "${YELLOW}[7/7] Running smoke tests${NC}"
+echo -e "${YELLOW}[8/8] Running smoke tests${NC}"
 if "$PROJECT_ROOT/infrastructure/scripts/smoke-test.sh"; then
   echo -e "${GREEN}OK: Smoke tests passed${NC}"
 else
