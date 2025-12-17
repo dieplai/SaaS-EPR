@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cookie Test</title>
+</head>
+<body>
+    <h1>Cookie Debug Tool</h1>
+    <button onclick="testSetCookie()">1. Set Test Cookie</button>
+    <button onclick="testGetCookie()">2. Get Test Cookie</button>
+    <button onclick="checkAuthCookies()">3. Check Auth Cookies</button>
+    <button onclick="clearAll()">4. Clear All</button>
+    <pre id="output"></pre>
+
+    <script>
+        const output = document.getElementById('output');
+
+        function log(msg) {
+            output.textContent += msg + '\n';
+        }
+
+        function testSetCookie() {
+            output.textContent = '';
+            const expires = new Date();
+            expires.setTime(expires.getTime() + 7 * 24 * 60 * 60 * 1000);
+            document.cookie = `testCookie=testValue;expires=${expires.toUTCString()};path=/;SameSite=Lax`;
+            log('✓ Set testCookie=testValue');
+            log('All cookies: ' + document.cookie);
+        }
+
+        function testGetCookie() {
+            output.textContent = '';
+            log('All cookies: ' + document.cookie);
+
+            const cookies = document.cookie.split(';');
+            cookies.forEach(c => {
+                log('  - ' + c.trim());
+            });
+        }
+
+        function checkAuthCookies() {
+            output.textContent = '';
+            log('=== AUTH COOKIES CHECK ===\n');
+
+            const accessToken = getCookie('accessToken');
+            const refreshToken = getCookie('refreshToken');
+            const rememberMe = getCookie('rememberMe');
+
+            log('accessToken: ' + (accessToken ? accessToken.substring(0, 20) + '...' : 'NOT FOUND'));
+            log('refreshToken: ' + (refreshToken ? refreshToken.substring(0, 20) + '...' : 'NOT FOUND'));
+            log('rememberMe: ' + (rememberMe || 'NOT FOUND'));
+
+            if (!accessToken) {
+                log('\n❌ NO ACCESS TOKEN - User will be logged out');
+            } else {
+                log('\n✓ Access token exists');
+            }
+        }
+
+        function getCookie(name) {
+            const nameEQ = name + "=";
+            const ca = document.cookie.split(';');
+            for (let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+            }
+            return null;
+        }
+
+        function clearAll() {
+            output.textContent = '';
+            document.cookie.split(';').forEach(c => {
+                const name = c.split('=')[0].trim();
+                document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;`;
+            });
+            log('✓ Cleared all cookies');
+            log('Remaining: ' + document.cookie);
+        }
+
+        // Auto check on load
+        window.onload = function() {
+            checkAuthCookies();
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+# ============================================
+# EPR Legal SaaS - Development Setup
+# Minimal services for development
+# ============================================
+
+services:
+  # ============================================
+  # DATABASE
+  # ============================================
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: epr-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-epr_saas}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/init-scripts:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - epr-network
+    restart: unless-stopped
+
+  # ============================================
+  # CACHE & SESSION
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: epr-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - epr-network
+    restart: unless-stopped
+
+  # ============================================
+  # BACKEND SERVICE (Go - DDD Structure)
+  # ============================================
+  epr-backend:
+    build:
+      context: ./backend/services/epr-backend
+      dockerfile: Dockerfile
+    container_name: epr-backend
+    ports:
+      - "${EPR_BACKEND_PORT:-8001}:8001"
+    environment:
+      - PORT=8001
+      - NODE_ENV=${NODE_ENV:-development}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-epr_saas}?sslmode=disable
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_EXPIRATION_MINUTES=${JWT_ACCESS_EXPIRATION_MINUTES:-15}
+      - JWT_REFRESH_EXPIRATION_HOURS=${JWT_REFRESH_EXPIRATION_HOURS:-168}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - epr-network
+    restart: unless-stopped
+
+  # ============================================
+  # AI CHATBOT API (Python - RAG + LangChain - FastAPI)
+  # ============================================
+  ai-chatbot-api:
+    build:
+      context: ./backend/services/epr-chatbot-service
+      dockerfile: Dockerfile
+    container_name: epr-ai-chatbot-api
+    ports:
+      - "${AI_CHATBOT_PORT:-8000}:8000"
+    environment:
+      - ENVIRONMENT=${NODE_ENV:-development}
+      - DEBUG=${DEBUG:-true}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - USE_QDRANT_CLOUD=${USE_QDRANT_CLOUD:-false}
+      - QDRANT_CLOUD_URL=${QDRANT_CLOUD_URL:-}
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-epr_saas}?sslmode=disable
+      - REDIS_URL=redis://redis:6379
+      - EPR_BACKEND_URL=http://epr-backend:8001
+      - JWT_SECRET=${JWT_SECRET}
+    volumes:
+      - chatbot_data:/app/qdrant_faq_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      epr-backend:
+        condition: service_started
+    networks:
+      - epr-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    command: ["uvicorn", "fastapi_server:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  # ============================================
+  # AI CHATBOT UI (Streamlit Interface)
+  # ============================================
+  ai-chatbot-ui:
+    build:
+      context: ./backend/services/epr-chatbot-service
+      dockerfile: Dockerfile
+    container_name: epr-ai-chatbot-ui
+    ports:
+      - "${STREAMLIT_PORT:-8501}:8501"
+    environment:
+      - ENVIRONMENT=${NODE_ENV:-development}
+      - DEBUG=${DEBUG:-true}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - USE_QDRANT_CLOUD=${USE_QDRANT_CLOUD:-false}
+      - QDRANT_CLOUD_URL=${QDRANT_CLOUD_URL:-}
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+    volumes:
+      - chatbot_data:/app/qdrant_faq_db
+    depends_on:
+      - ai-chatbot-api
+    networks:
+      - epr-network
+    restart: unless-stopped
+    command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+
+  # ============================================
+  # FRONTEND WEB (Next.js)
+  # ============================================
+  web-frontend:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: epr-web-frontend
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://epr-backend:8001/api/v1
+      - NEXT_PUBLIC_CHATBOT_API_URL=http://ai-chatbot-api:8000
+      - NEXT_PUBLIC_BROWSER_API_URL=http://localhost:8001/api/v1
+      - NEXT_PUBLIC_BROWSER_CHATBOT_URL=http://localhost:8000
+      - NEXT_PUBLIC_APP_NAME=EPR SaaS Platform
+      - NEXT_PUBLIC_APP_URL=http://localhost:3001
+    depends_on:
+      epr-backend:
+        condition: service_started
+      ai-chatbot-api:
+        condition: service_healthy
+    networks:
+      - epr-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  epr-network:
+    driver: bridge
+    name: epr-network
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  postgres_data:
+    name: epr_postgres_data
+  redis_data:
+    name: epr_redis_data
+  chatbot_data:
+    name: epr_chatbot_data

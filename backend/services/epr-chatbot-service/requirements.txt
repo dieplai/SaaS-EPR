@@ -1,0 +1,43 @@
+# Core dependencies
+streamlit==1.40.0
+
+# LangChain and related - Fixed compatible versions
+langchain==0.1.20
+langchain-community==0.0.38
+langchain-openai==0.1.7
+langchain-chroma==0.1.4
+langchain-qdrant==0.1.4
+langchain-core==0.1.52
+langgraph==0.0.32
+langchainhub==0.1.21
+
+# Vector stores
+chromadb==0.4.24
+qdrant-client>=1.10.1,<2.0.0
+
+# OpenAI - compatible with langchain-openai==0.1.7
+openai>=1.24.0,<2.0.0
+
+# Web search
+tavily-python==0.3.3
+
+# Utilities
+pydantic>=2.7.4,<3.0.0
+python-dotenv==1.0.1
+lark==1.1.9
+tqdm>=4.66.0
+
+# Required for parsing - compatible with langchain-openai==0.1.7
+tiktoken>=0.7,<1
+
+# New features
+fpdf2==2.7.9
+gTTS==2.5.1
+
+# FastAPI and async HTTP client
+fastapi>=0.109.0,<1.0.0
+uvicorn>=0.27.0,<1.0.0
+httpx>=0.26.0,<1.0.0
+
+# Redis for caching and rate limiting
+redis>=5.0.0,<6.0.0

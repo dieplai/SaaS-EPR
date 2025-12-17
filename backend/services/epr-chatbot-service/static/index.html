@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPR Chatbot Service</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+            max-height: 600px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px 15px 0 0;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            text-align: right;
+        }
+
+        .message-content {
+            display: inline-block;
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant .message-content {
+            background: #e9ecef;
+            color: #333;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message.status {
+            text-align: center;
+            padding: 10px;
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            border-radius: 4px;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            border-radius: 4px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #ffc107;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .input-area {
+            padding: 15px;
+            border-top: 1px solid #e0e0e0;
+            background: white;
+            border-radius: 0 0 15px 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-field {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .send-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .send-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .info-panel {
+            padding: 10px;
+            font-size: 11px;
+            color: #666;
+            border-top: 1px solid #eee;
+            background: #fafafa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            background: #d4edda;
+            color: #155724;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .status-badge.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .controls {
+            padding: 10px 15px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .control-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-btn:hover {
+            background: #f0f0f0;
+            border-color: #667eea;
+        }
+
+        .control-btn.clear {
+            color: #dc3545;
+            border-color: #dc3545;
+        }
+
+        .control-btn.clear:hover {
+            background: #f8d7da;
+        }
+
+        label {
+            font-size: 12px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        input[type="checkbox"] {
+            cursor: pointer;
+        }
+
+        input[type="range"] {
+            width: 100px;
+        }
+
+        .range-value {
+            font-size: 12px;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .scroll-to-bottom {
+            text-align: center;
+            padding: 10px;
+            background: #e7f3ff;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            color: #0066cc;
+            display: none;
+        }
+
+        .scroll-to-bottom:hover {
+            background: #d0e8ff;
+        }
+
+        .scroll-to-bottom.show {
+            display: block;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                max-height: none;
+                height: 100%;
+            }
+
+            .message-content {
+                max-width: 95%;
+            }
+
+            .input-area {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 EPR Chatbot Service</h1>
+            <p>Vietnamese Legal Q&A System - Streaming Chat Interface</p>
+        </div>
+
+        <div class="chat-container" id="chatContainer">
+            <div class="message status">
+                <span class="status-indicator"></span>
+                Ready to chat. Ask any EPR-related legal questions!
+            </div>
+        </div>
+
+        <div class="controls">
+            <label>
+                <input type="checkbox" id="useParallel" checked> Use Parallel Retrieval
+            </label>
+            <label>
+                FAQ Threshold:
+                <input type="range" id="faqThreshold" min="0" max="1" step="0.1" value="0.6">
+                <span class="range-value" id="thresholdValue">0.6</span>
+            </label>
+            <button class="control-btn" onclick="viewHistory()">📋 View History</button>
+            <button class="control-btn clear" onclick="clearMemory()">🗑️ Clear Memory</button>
+        </div>
+
+        <div class="input-area">
+            <input
+                type="text"
+                class="input-field"
+                id="questionInput"
+                placeholder="Nhập câu hỏi của bạn..."
+                onkeypress="handleKeyPress(event)"
+            >
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()">Gửi</button>
+        </div>
+
+        <div class="info-panel">
+            <span id="status" class="status-badge">Sẵn sàng</span>
+            <span id="info">API: /api/v1/chat</span>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/v1';
+        const chatContainer = document.getElementById('chatContainer');
+        const questionInput = document.getElementById('questionInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const statusBadge = document.getElementById('status');
+        const useParallelCheckbox = document.getElementById('useParallel');
+        const faqThresholdInput = document.getElementById('faqThreshold');
+        const thresholdValue = document.getElementById('thresholdValue');
+        let isWaitingForResponse = false;
+
+        // Update threshold value display
+        faqThresholdInput.addEventListener('change', () => {
+            thresholdValue.textContent = faqThresholdInput.value;
+        });
+
+        // Handle Enter key
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !isWaitingForResponse) {
+                sendMessage();
+            }
+        }
+
+        // Add message to chat
+        function addMessage(content, type = 'assistant', isStreaming = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
+
+            messageDiv.appendChild(contentDiv);
+            chatContainer.appendChild(messageDiv);
+            scrollToBottom();
+
+            return contentDiv;
+        }
+
+        // Add status message
+        function addStatus(content, isError = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message status ${isError ? 'error' : ''}`;
+            messageDiv.innerHTML = isError
+                ? `❌ ${content}`
+                : `<span class="status-indicator"></span>${content}`;
+            chatContainer.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        // Scroll to bottom
+        function scrollToBottom() {
+            setTimeout(() => {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }, 0);
+        }
+
+        // Send message
+        async function sendMessage() {
+            const question = questionInput.value.trim();
+            if (!question) return;
+
+            // Disable input
+            isWaitingForResponse = true;
+            sendBtn.disabled = true;
+            questionInput.disabled = true;
+            statusBadge.textContent = '🔄 Đang xử lý...';
+            statusBadge.style.background = '#fff3cd';
+
+            // Add user message
+            addMessage(question, 'user');
+            questionInput.value = '';
+
+            try {
+                // Add status
+                addStatus('⏳ Tìm kiếm tài liệu...');
+
+                // Fetch stream
+                const response = await fetch(`${API_BASE}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question: question,
+                        chat_history: '',
+                        faq_threshold: parseFloat(faqThresholdInput.value),
+                        use_parallel: useParallelCheckbox.checked
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullResponse = '';
+                let contentDiv = null;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const text = decoder.decode(value);
+                    const lines = text.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const event = JSON.parse(line.slice(6));
+
+                                if (event.type === 'status') {
+                                    addStatus(event.message);
+                                } else if (event.type === 'response_chunk') {
+                                    if (!contentDiv) {
+                                        contentDiv = addMessage('', 'assistant');
+                                    }
+                                    fullResponse += event.chunk;
+                                    contentDiv.textContent = fullResponse;
+                                    scrollToBottom();
+                                } else if (event.type === 'response_complete') {
+                                    if (!contentDiv) {
+                                        contentDiv = addMessage('', 'assistant');
+                                    }
+                                    // Handle both 'response' and 'text' field names
+                                    const finalResponse = event.response || event.text || fullResponse;
+                                    contentDiv.textContent = finalResponse;
+                                    fullResponse = finalResponse;
+
+                                    // Show sources/documents if available
+                                    const sources = event.sources || event.documents || [];
+                                    if (sources && sources.length > 0) {
+                                        const sourceDiv = document.createElement('div');
+                                        sourceDiv.style.fontSize = '12px';
+                                        sourceDiv.style.color = '#666';
+                                        sourceDiv.style.marginTop = '8px';
+                                        sourceDiv.style.paddingTop = '8px';
+                                        sourceDiv.style.borderTop = '1px solid #ddd';
+                                        sourceDiv.innerHTML = '<strong>📚 Nguồn:</strong><br>' +
+                                            sources.map(s => {
+                                                if (s.content) return `• ${s.content.slice(0, 50)}...`;
+                                                if (s.text) return `• ${s.text.slice(0, 50)}...`;
+                                                return `• ${JSON.stringify(s).slice(0, 50)}...`;
+                                            }).join('<br>');
+                                        contentDiv.parentElement.appendChild(sourceDiv);
+                                    }
+
+                                    statusBadge.textContent = '✅ Thành công';
+                                    statusBadge.style.background = '#d4edda';
+                                } else if (event.type === 'error') {
+                                    addStatus(event.message, true);
+                                    statusBadge.textContent = '❌ Lỗi';
+                                    statusBadge.style.background = '#f8d7da';
+                                }
+                            } catch (e) {
+                                console.error('Parse error:', e);
+                            }
+                        }
+                    }
+                }
+
+            } catch (error) {
+                addStatus(`Lỗi: ${error.message}`, true);
+                statusBadge.textContent = '❌ Lỗi kết nối';
+                statusBadge.style.background = '#f8d7da';
+            } finally {
+                isWaitingForResponse = false;
+                sendBtn.disabled = false;
+                questionInput.disabled = false;
+                questionInput.focus();
+            }
+        }
+
+        // View chat history
+        async function viewHistory() {
+            try {
+                const response = await fetch(`${API_BASE}/chat-history`);
+                const data = await response.json();
+                addMessage(data.history || 'Không có lịch sử', 'assistant');
+            } catch (error) {
+                addStatus(`Lỗi tải lịch sử: ${error.message}`, true);
+            }
+        }
+
+        // Clear memory
+        async function clearMemory() {
+            if (!confirm('Bạn có chắc muốn xoá toàn bộ lịch sử trò chuyện?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/clear-memory`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                addStatus('✅ ' + data.message);
+                chatContainer.innerHTML = '<div class="message status"><span class="status-indicator"></span>Lịch sử đã được xoá. Sẵn sàng chat!</div>';
+                scrollToBottom();
+            } catch (error) {
+                addStatus(`Lỗi xoá bộ nhớ: ${error.message}`, true);
+            }
+        }
+
+        // Auto-focus on load
+        window.addEventListener('load', () => {
+            questionInput.focus();
+        });
+    </script>
+</body>
+</html>

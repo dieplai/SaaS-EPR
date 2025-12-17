@@ -1,0 +1,144 @@
+name: Deploy
+
+on:
+  # Auto deploy to staging when pushing to main
+  push:
+    branches:
+      - main
+
+  # Manual deploy to production
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      # ============================================
+      # 1. Determine Environment
+      # ============================================
+      - name: Set environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "name=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          else
+            echo "name=staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Environment info
+        run: |
+          echo "🚀 Deploying to: ${{ steps.env.outputs.name }}"
+          echo "📦 Repository: ${{ github.repository }}"
+          echo "🔖 SHA: ${{ github.sha }}"
+
+      # ============================================
+      # 2. Checkout Code
+      # ============================================
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ============================================
+      # 3. Login to GitHub Container Registry
+      # ============================================
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ============================================
+      # 4. Build & Push Docker Images
+      # ============================================
+      - name: Build and push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/services/epr-backend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ steps.env.outputs.name }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ steps.env.outputs.name }}-${{ github.sha }}
+
+      - name: Build and push Chatbot
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/services/epr-chatbot-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-chatbot:${{ steps.env.outputs.name }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-chatbot:${{ steps.env.outputs.name }}-${{ github.sha }}
+
+      - name: Build and push Web Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./web
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-web:${{ steps.env.outputs.name }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-web:${{ steps.env.outputs.name }}-${{ github.sha }}
+
+      # ============================================
+      # 5. Deploy to VPS
+      # ============================================
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_ENV: ${{ steps.env.outputs.name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          envs: DEPLOY_ENV,GITHUB_REPOSITORY
+          script: |
+            # Navigate to project directory
+            cd ${{ secrets.VPS_PROJECT_PATH || '/opt/epr-saas' }}
+
+            # Pull latest code
+            git pull origin main
+
+            # Set secrets as environment variables
+            export POSTGRES_PASSWORD="${{ secrets[format('{0}_POSTGRES_PASSWORD', steps.env.outputs.name == 'staging' && 'STAGING' || 'PROD')] }}"
+            export REDIS_PASSWORD="${{ secrets[format('{0}_REDIS_PASSWORD', steps.env.outputs.name == 'staging' && 'STAGING' || 'PROD')] }}"
+            export JWT_SECRET="${{ secrets[format('{0}_JWT_SECRET', steps.env.outputs.name == 'staging' && 'STAGING' || 'PROD')] }}"
+            export OPENAI_API_KEY="${{ secrets[format('{0}_OPENAI_API_KEY', steps.env.outputs.name == 'staging' && 'STAGING' || 'PROD')] }}"
+            export QDRANT_API_KEY="${{ secrets[format('{0}_QDRANT_API_KEY', steps.env.outputs.name == 'staging' && 'STAGING' || 'PROD')] }}"
+            export QDRANT_CLOUD_URL="${{ secrets[format('{0}_QDRANT_CLOUD_URL', steps.env.outputs.name == 'staging' && 'STAGING' || 'PROD')] }}"
+            export LANGCHAIN_TRACING_V2="${{ secrets.LANGCHAIN_TRACING_V2 || 'false' }}"
+            export LANGCHAIN_API_KEY="${{ secrets.LANGCHAIN_API_KEY || '' }}"
+            export TAVILY_API_KEY="${{ secrets.TAVILY_API_KEY || '' }}"
+
+            # Run deploy script
+            ./infrastructure/scripts/deploy.sh $DEPLOY_ENV
+
+      # ============================================
+      # 6. Deployment Summary
+      # ============================================
+      - name: Deployment summary
+        if: always()
+        run: |
+          echo "## Deployment Summary 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ steps.env.outputs.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Images**:" >> $GITHUB_STEP_SUMMARY
+          echo "  - Backend: \`${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ steps.env.outputs.name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "  - Chatbot: \`${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-chatbot:${{ steps.env.outputs.name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "  - Web: \`${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-web:${{ steps.env.outputs.name }}\`" >> $GITHUB_STEP_SUMMARY

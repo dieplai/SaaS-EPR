@@ -1,0 +1,611 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-elegant: var(--font-elegant);
+  --font-refined: var(--font-refined);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.5rem;
+  /* Swiss Eco-Minimalism - Soft, natural, refined */
+  --background: oklch(0.985 0.003 120);
+  --foreground: oklch(0.20 0.01 140);
+  --card: oklch(0.99 0.002 130);
+  --card-foreground: oklch(0.20 0.01 140);
+  --popover: oklch(0.99 0.002 130);
+  --popover-foreground: oklch(0.20 0.01 140);
+  /* Soft sage primary */
+  --primary: oklch(0.52 0.08 150);
+  --primary-foreground: oklch(0.985 0.003 120);
+  /* Warm sand secondary */
+  --secondary: oklch(0.93 0.02 85);
+  --secondary-foreground: oklch(0.25 0.01 140);
+  /* Subtle earth muted */
+  --muted: oklch(0.96 0.01 110);
+  --muted-foreground: oklch(0.45 0.02 145);
+  /* Soft moss accent */
+  --accent: oklch(0.88 0.04 145);
+  --accent-foreground: oklch(0.25 0.01 140);
+  --destructive: oklch(0.50 0.18 30);
+  --border: oklch(0.90 0.01 130);
+  --input: oklch(0.96 0.01 130);
+  --ring: oklch(0.52 0.08 150);
+  /* Refined chart colors */
+  --chart-1: oklch(0.55 0.10 150);
+  --chart-2: oklch(0.60 0.09 140);
+  --chart-3: oklch(0.65 0.07 160);
+  --chart-4: oklch(0.58 0.08 80);
+  --chart-5: oklch(0.50 0.09 170);
+  /* Clean sidebar */
+  --sidebar: oklch(0.985 0.003 120);
+  --sidebar-foreground: oklch(0.25 0.01 140);
+  --sidebar-primary: oklch(0.52 0.08 150);
+  --sidebar-primary-foreground: oklch(0.985 0.003 120);
+  --sidebar-accent: oklch(0.96 0.01 130);
+  --sidebar-accent-foreground: oklch(0.25 0.01 140);
+  --sidebar-border: oklch(0.90 0.01 130);
+  --sidebar-ring: oklch(0.52 0.08 150);
+}
+
+.dark {
+  /* Dark mode eco theme - deep forest night */
+  --background: oklch(0.18 0.02 160);
+  --foreground: oklch(0.95 0.01 145);
+  --card: oklch(0.22 0.02 155);
+  --card-foreground: oklch(0.95 0.01 145);
+  --popover: oklch(0.22 0.02 155);
+  --popover-foreground: oklch(0.95 0.01 145);
+  /* Bright eco green for dark mode */
+  --primary: oklch(0.65 0.15 155);
+  --primary-foreground: oklch(0.15 0.02 160);
+  /* Muted sage */
+  --secondary: oklch(0.30 0.03 150);
+  --secondary-foreground: oklch(0.95 0.01 145);
+  --muted: oklch(0.28 0.02 155);
+  --muted-foreground: oklch(0.65 0.02 150);
+  /* Mint accent */
+  --accent: oklch(0.35 0.05 165);
+  --accent-foreground: oklch(0.95 0.01 145);
+  --destructive: oklch(0.60 0.20 25);
+  --border: oklch(0.30 0.02 155);
+  --input: oklch(0.25 0.02 155);
+  --ring: oklch(0.65 0.15 155);
+  /* Dark mode charts */
+  --chart-1: oklch(0.60 0.15 155);
+  --chart-2: oklch(0.70 0.12 140);
+  --chart-3: oklch(0.65 0.10 170);
+  --chart-4: oklch(0.65 0.12 45);
+  --chart-5: oklch(0.55 0.12 180);
+  /* Dark sidebar */
+  --sidebar: oklch(0.20 0.02 158);
+  --sidebar-foreground: oklch(0.90 0.01 145);
+  --sidebar-primary: oklch(0.65 0.15 155);
+  --sidebar-primary-foreground: oklch(0.15 0.02 160);
+  --sidebar-accent: oklch(0.26 0.03 155);
+  --sidebar-accent-foreground: oklch(0.90 0.01 145);
+  --sidebar-border: oklch(0.28 0.02 155);
+  --sidebar-ring: oklch(0.65 0.15 155);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  /* Organic blob shapes for eco design */
+  .blob-1 {
+    border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+  }
+  .blob-2 {
+    border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+  }
+  .blob-3 {
+    border-radius: 40% 60% 60% 40% / 60% 40% 40% 60%;
+  }
+
+  /* Gradient utilities for eco theme */
+  .gradient-eco {
+    background: linear-gradient(135deg, oklch(0.55 0.15 155) 0%, oklch(0.65 0.12 140) 100%);
+  }
+  .gradient-eco-soft {
+    background: linear-gradient(135deg, oklch(0.92 0.04 150) 0%, oklch(0.95 0.02 160) 100%);
+  }
+  .gradient-eco-radial {
+    background: radial-gradient(circle at 30% 30%, oklch(0.65 0.12 155 / 0.15) 0%, transparent 60%);
+  }
+
+  /* Vibrant gradient backgrounds */
+  .gradient-vibrant-mesh {
+    background:
+      radial-gradient(at 0% 0%, oklch(0.85 0.15 155 / 0.4) 0%, transparent 50%),
+      radial-gradient(at 100% 0%, oklch(0.80 0.12 180 / 0.3) 0%, transparent 50%),
+      radial-gradient(at 100% 100%, oklch(0.82 0.14 140 / 0.35) 0%, transparent 50%),
+      radial-gradient(at 0% 100%, oklch(0.78 0.10 170 / 0.3) 0%, transparent 50%),
+      oklch(0.985 0.003 120);
+  }
+  .gradient-vibrant-hero {
+    background:
+      radial-gradient(at 20% 30%, oklch(0.88 0.18 155 / 0.5) 0%, transparent 40%),
+      radial-gradient(at 80% 20%, oklch(0.85 0.15 175 / 0.4) 0%, transparent 40%),
+      radial-gradient(at 40% 80%, oklch(0.90 0.12 140 / 0.3) 0%, transparent 40%),
+      linear-gradient(180deg, oklch(0.98 0.005 120) 0%, oklch(0.96 0.01 145) 100%);
+  }
+  .gradient-chat-bubble {
+    background: linear-gradient(135deg, oklch(0.58 0.12 155) 0%, oklch(0.63 0.14 165) 100%);
+  }
+
+  /* Glass-morphism effects */
+  .glass-effect {
+    background: oklch(0.99 0.002 130 / 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid oklch(0.95 0.01 130 / 0.3);
+  }
+  .glass-chat-bubble {
+    background: oklch(0.96 0.01 130 / 0.8);
+    backdrop-filter: blur(8px);
+    border: 1px solid oklch(0.90 0.02 140 / 0.2);
+  }
+
+  /* Text gradients */
+  .text-gradient-eco {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, oklch(0.45 0.12 155) 0%, oklch(0.55 0.15 140) 100%);
+  }
+  .text-gradient-vibrant {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, oklch(0.50 0.15 155) 0%, oklch(0.58 0.16 170) 40%, oklch(0.55 0.14 140) 100%);
+  }
+
+  /* Smooth animations */
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+  }
+  @keyframes float-slow {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-15px) rotate(2deg); }
+  }
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 0.9; }
+  }
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes gradient-shift {
+    0%, 100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+  @keyframes blob-float {
+    0%, 100% {
+      transform: translate(0, 0) scale(1);
+    }
+    33% {
+      transform: translate(30px, -30px) scale(1.05);
+    }
+    66% {
+      transform: translate(-20px, 20px) scale(0.95);
+    }
+  }
+
+  /* Thinking dots animation */
+  @keyframes thinking-bounce {
+    0%, 60%, 100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-10px);
+      opacity: 1;
+    }
+  }
+
+  /* Fade in animation for messages */
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Subtle shimmer effect */
+  @keyframes shimmer {
+    0% {
+      background-position: -1000px 0;
+    }
+    100% {
+      background-position: 1000px 0;
+    }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+  .animate-float-slow {
+    animation: float-slow 8s ease-in-out infinite;
+  }
+  .animate-pulse-soft {
+    animation: pulse-soft 4s ease-in-out infinite;
+  }
+  .animate-slide-up {
+    animation: slide-up 0.6s ease-out forwards;
+  }
+  .animate-gradient-shift {
+    background-size: 200% 200%;
+    animation: gradient-shift 8s ease infinite;
+  }
+  .animate-blob-float {
+    animation: blob-float 20s ease-in-out infinite;
+  }
+  .animate-fade-in-up {
+    animation: fade-in-up 0.4s ease-out forwards;
+  }
+
+  /* Refined minimalist styles */
+  .font-elegant {
+    font-family: var(--font-elegant);
+  }
+  .font-refined {
+    font-family: var(--font-refined);
+  }
+
+  /* Premium input focus effect */
+  @keyframes input-glow {
+    0% {
+      box-shadow: 0 0 0 0 oklch(0.52 0.08 150 / 0.2);
+    }
+    100% {
+      box-shadow: 0 0 0 4px oklch(0.52 0.08 150 / 0);
+    }
+  }
+
+  .input-focus-glow:focus {
+    animation: input-glow 0.6s ease-out;
+  }
+
+  /* Soft luxury background */
+  .bg-luxury-cream {
+    background: linear-gradient(
+      135deg,
+      oklch(0.99 0.005 85) 0%,
+      oklch(0.985 0.008 95) 100%
+    );
+  }
+
+  /* Elevated card shadow */
+  .shadow-luxury {
+    box-shadow:
+      0 0 0 1px oklch(0.85 0.01 130 / 0.1),
+      0 20px 50px -12px oklch(0.30 0.02 155 / 0.08),
+      0 8px 16px -8px oklch(0.30 0.02 155 / 0.05);
+  }
+
+  .shadow-luxury-hover {
+    box-shadow:
+      0 0 0 1px oklch(0.85 0.01 130 / 0.15),
+      0 24px 60px -12px oklch(0.30 0.02 155 / 0.12),
+      0 12px 20px -8px oklch(0.30 0.02 155 / 0.08);
+  }
+
+  /* ========================================
+     NEO-BRUTALIST ECO ADMIN THEME
+     Artistic, High-Contrast, Professional
+     ======================================== */
+
+  /* Bold geometric background with strong contrast */
+  .cosmic-bg {
+    background-color: #0A0E0D;
+    background-image:
+      repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(34, 197, 94, 0.03) 2px, rgba(34, 197, 94, 0.03) 4px),
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(34, 197, 94, 0.03) 2px, rgba(34, 197, 94, 0.03) 4px),
+      radial-gradient(ellipse at 10% 20%, rgba(34, 197, 94, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 90% 80%, rgba(20, 184, 166, 0.06) 0%, transparent 50%);
+  }
+
+  /* Neo-brutalist card - sharp, bold, high contrast */
+  .glass-card {
+    background: linear-gradient(135deg, #111413 0%, #161B19 100%);
+    border: 2px solid #1F2923;
+    box-shadow:
+      0 0 0 1px rgba(34, 197, 94, 0.1),
+      8px 8px 0 0 rgba(34, 197, 94, 0.05),
+      0 20px 40px -10px rgba(0, 0, 0, 0.5);
+    position: relative;
+    will-change: transform;
+  }
+
+  .glass-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #22C55E 0%, #14B8A6 50%, #22C55E 100%);
+    background-size: 200% 100%;
+  }
+
+  .glass-card-hover:hover {
+    border-color: #22C55E;
+    box-shadow:
+      0 0 0 2px #22C55E,
+      12px 12px 0 0 rgba(34, 197, 94, 0.1),
+      0 24px 48px -10px rgba(0, 0, 0, 0.6);
+    transform: translateY(-4px);
+  }
+
+  /* Stat card with bold styling */
+  .stat-card {
+    background: linear-gradient(135deg, #141917 0%, #1A1F1D 100%);
+    border: 3px solid #22C55E;
+    border-left-width: 8px;
+    box-shadow:
+      0 0 0 1px rgba(34, 197, 94, 0.2),
+      12px 12px 0 0 rgba(34, 197, 94, 0.08),
+      0 16px 32px -8px rgba(0, 0, 0, 0.4);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(34, 197, 94, 0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* Bold glow effects - neo-brutalist style */
+  .glow-cyan {
+    box-shadow:
+      0 0 0 3px rgba(20, 184, 166, 0.3),
+      0 0 30px rgba(20, 184, 166, 0.4),
+      inset 0 0 20px rgba(20, 184, 166, 0.1);
+  }
+
+  .glow-amber {
+    box-shadow:
+      0 0 0 3px rgba(245, 158, 11, 0.3),
+      0 0 30px rgba(245, 158, 11, 0.4),
+      inset 0 0 20px rgba(245, 158, 11, 0.1);
+  }
+
+  .glow-violet {
+    box-shadow:
+      0 0 0 3px rgba(132, 204, 22, 0.3),
+      0 0 30px rgba(132, 204, 22, 0.4),
+      inset 0 0 20px rgba(132, 204, 22, 0.1);
+  }
+
+  .glow-emerald {
+    box-shadow:
+      0 0 0 3px rgba(34, 197, 94, 0.3),
+      0 0 30px rgba(34, 197, 94, 0.4),
+      inset 0 0 20px rgba(34, 197, 94, 0.1);
+  }
+
+  /* Neo-brutalist sidebar - bold and geometric */
+  .glass-sidebar {
+    background: linear-gradient(180deg, #0D1211 0%, #111716 100%);
+    border-right: 3px solid #1F2923;
+    box-shadow:
+      0 0 0 1px rgba(34, 197, 94, 0.1),
+      8px 0 0 0 rgba(34, 197, 94, 0.05),
+      0 0 40px rgba(0, 0, 0, 0.5);
+    position: relative;
+  }
+
+  .glass-sidebar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 3px;
+    height: 100%;
+    background: linear-gradient(180deg, #22C55E 0%, transparent 50%, #14B8A6 100%);
+    opacity: 0.3;
+  }
+
+  /* Removed float-card animation for better performance */
+
+  /* Staggered fade-in for dashboard elements */
+  @keyframes cascade-in {
+    from {
+      opacity: 0;
+      transform: translateY(20px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .animate-cascade {
+    animation: cascade-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  /* Bold gradient text - neo-brutalist */
+  .text-gradient-cosmic {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(
+      135deg,
+      #22C55E 0%,
+      #14B8A6 50%,
+      #10B981 100%
+    );
+    filter: drop-shadow(0 0 20px rgba(34, 197, 94, 0.3));
+  }
+
+  .text-gradient-amber {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(
+      135deg,
+      #F59E0B 0%,
+      #EAB308 100%
+    );
+    filter: drop-shadow(0 0 20px rgba(245, 158, 11, 0.3));
+  }
+
+  /* Neo-brutalist table */
+  .glass-table {
+    background: #0F1412;
+    border: 2px solid #1F2923;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .glass-table-row:hover {
+    background: linear-gradient(90deg, rgba(34, 197, 94, 0.05) 0%, transparent 100%);
+    border-left: 3px solid #22C55E;
+  }
+
+  /* Smooth transitions */
+  .transition-glass {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Bold input fields */
+  .glass-input {
+    background: #0F1412;
+    border: 2px solid #1F2923;
+    transition: all 0.2s ease;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .glass-input:focus {
+    background: #141917;
+    border-color: #22C55E;
+    box-shadow:
+      0 0 0 3px rgba(34, 197, 94, 0.2),
+      inset 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Neo-brutalist button */
+  .glass-button {
+    background: linear-gradient(135deg, #22C55E 0%, #14B8A6 100%);
+    border: 2px solid #1F2923;
+    box-shadow:
+      0 0 0 1px rgba(34, 197, 94, 0.3),
+      4px 4px 0 0 rgba(34, 197, 94, 0.2),
+      0 8px 16px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .glass-button:hover {
+    background: linear-gradient(135deg, #16A34A 0%, #0D9488 100%);
+    box-shadow:
+      0 0 0 2px #22C55E,
+      6px 6px 0 0 rgba(34, 197, 94, 0.3),
+      0 12px 24px rgba(0, 0, 0, 0.4);
+    transform: translate(-2px, -2px);
+  }
+
+  .glass-button:active {
+    transform: translate(2px, 2px);
+    box-shadow:
+      0 0 0 2px #22C55E,
+      2px 2px 0 0 rgba(34, 197, 94, 0.3);
+  }
+
+  /* Neo-brutalist badge */
+  .glass-badge {
+    background: linear-gradient(135deg, #1A1F1D 0%, #0F1412 100%);
+    border: 2px solid #22C55E;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    box-shadow:
+      0 0 0 1px rgba(34, 197, 94, 0.2),
+      3px 3px 0 0 rgba(34, 197, 94, 0.1);
+  }
+
+  /* Scrollbar styling - bold and geometric */
+  .glass-scrollbar::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .glass-scrollbar::-webkit-scrollbar-track {
+    background: #0F1412;
+    border: 1px solid #1F2923;
+  }
+
+  .glass-scrollbar::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #22C55E 0%, #14B8A6 100%);
+    border: 2px solid #1F2923;
+  }
+
+  .glass-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #16A34A 0%, #0D9488 100%);
+  }
+}
+
+

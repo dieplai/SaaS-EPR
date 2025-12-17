@@ -1,0 +1,121 @@
+# ============================================
+# EPR Legal SaaS - Git Ignore
+# ============================================
+
+# ============================================
+# ENVIRONMENT FILES (SECURITY CRITICAL!)
+# ============================================
+# Never commit actual environment files with secrets
+.env
+.env.local
+.env.*.local
+
+# Ignore actual env files in infrastructure/
+infrastructure/.env.dev
+infrastructure/.env.staging
+infrastructure/.env.prod
+
+# Allow template files (these are safe to commit)
+!.env.example
+!**/.env.example
+!**/.env.*.template
+
+# Service-level env files (should not be used in Docker)
+web/.env.local
+backend/services/**/.env
+!backend/services/**/.env.example
+
+# ============================================
+# DEPENDENCIES
+# ============================================
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Go
+vendor/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# ============================================
+# BUILD & DIST
+# ============================================
+dist/
+build/
+*.out
+*.test
+coverage/
+.coverage
+
+# ============================================
+# IDEs & EDITORS
+# ============================================
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains (GoLand, PyCharm, etc)
+.idea/
+*.iml
+*.iws
+
+# Vim
+*.swp
+*.swo
+*~
+
+# ============================================
+# OS FILES
+# ============================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ============================================
+# LOGS
+# ============================================
+*.log
+logs/
+*.log.*
+
+# ============================================
+# DATABASE & CACHE
+# ============================================
+*.db
+*.sqlite
+*.sqlite3
+
+# ============================================
+# DOCKER
+# ============================================
+# Don't ignore docker-compose files, but ignore override
+docker-compose.override.yml
+
+# ============================================
+# TEMPORARY & MISC
+# ============================================
+tmp/
+temp/
+*.tmp
+.cache/
