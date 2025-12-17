@@ -15,7 +15,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Configuration
-MAX_RETRIES=30
+MAX_RETRIES=10
 RETRY_INTERVAL=5
 SERVICES=(
   "Backend:http://localhost:8001/health"
