@@ -113,6 +113,15 @@ jobs:
             # Pull latest code
             git pull origin main
 
+            # Database operations (backup for prod, sync for staging)
+            if [ "$DEPLOY_ENV" == "production" ]; then
+              echo "📦 Backing up production database..."
+              ./infrastructure/scripts/backup-db.sh
+            elif [ "$DEPLOY_ENV" == "staging" ]; then
+              echo "🔄 Syncing staging DB from production..."
+              ./infrastructure/scripts/sync-db-from-prod.sh
+            fi
+
             # Set secrets as environment variables
             export POSTGRES_PASSWORD="${{ secrets[format('{0}_POSTGRES_PASSWORD', steps.env.outputs.name == 'staging' && 'STAGING' || 'PROD')] }}"
             export REDIS_PASSWORD="${{ secrets[format('{0}_REDIS_PASSWORD', steps.env.outputs.name == 'staging' && 'STAGING' || 'PROD')] }}"
