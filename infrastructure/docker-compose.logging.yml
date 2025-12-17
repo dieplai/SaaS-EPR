@@ -1,0 +1,117 @@
+# ============================================
+# EPR SaaS - Logging Configuration
+# ============================================
+# Centralized logging with Loki + Promtail
+# Usage: Include this file in docker compose commands
+# ============================================
+
+services:
+  # Loki - Log aggregation system
+  loki:
+    image: grafana/loki:2.9.3
+    container_name: epr-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+    networks:
+      - epr-network
+
+  # Promtail - Log collector (sends logs to Loki)
+  promtail:
+    image: grafana/promtail:2.9.3
+    container_name: epr-promtail
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    restart: unless-stopped
+    networks:
+      - epr-network
+    depends_on:
+      - loki
+
+  # Grafana - Visualization (logs + metrics)
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: epr-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana-provisioning:/etc/grafana/provisioning
+    restart: unless-stopped
+    networks:
+      - epr-network
+    depends_on:
+      - loki
+      - prometheus
+
+  # Prometheus - Metrics collection
+  prometheus:
+    image: prom/prometheus:v2.48.1
+    container_name: epr-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus-data:/prometheus
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/alerts:/etc/prometheus/alerts:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    restart: unless-stopped
+    networks:
+      - epr-network
+
+  # Node Exporter - System metrics
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: epr-node-exporter
+    ports:
+      - "9100:9100"
+    command:
+      - '--path.rootfs=/host'
+    volumes:
+      - '/:/host:ro,rslave'
+    restart: unless-stopped
+    networks:
+      - epr-network
+
+  # cAdvisor - Container metrics
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: epr-cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    restart: unless-stopped
+    networks:
+      - epr-network
+
+volumes:
+  loki-data:
+    name: epr-loki-data
+  grafana-data:
+    name: epr-grafana-data
+  prometheus-data:
+    name: epr-prometheus-data
+
+networks:
+  epr-network:
+    external: true

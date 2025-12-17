@@ -1,0 +1,72 @@
+# ============================================
+# Resource Usage Alerts
+# ============================================
+# Alert on high CPU, memory, disk usage
+# ============================================
+
+groups:
+  - name: resource_usage
+    interval: 30s
+    rules:
+      # High CPU usage
+      - alert: HighCpuUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value | humanize }}% on {{ $labels.instance }}"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value | humanize }}% on {{ $labels.instance }}"
+
+      # Low disk space
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space"
+          description: "Only {{ $value | humanize }}% disk space available on {{ $labels.instance }}"
+
+      # Critical disk space
+      - alert: CriticalDiskSpace
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk space"
+          description: "Only {{ $value | humanize }}% disk space available on {{ $labels.instance }}"
+
+  - name: container_resources
+    interval: 30s
+    rules:
+      # Container high memory usage
+      - alert: ContainerHighMemory
+        expr: (container_memory_usage_bytes{name=~"epr-.*"} / container_spec_memory_limit_bytes{name=~"epr-.*"}) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container using too much memory"
+          description: "Container {{ $labels.name }} is using {{ $value | humanize }}% of memory limit"
+
+      # Container restart
+      - alert: ContainerRestarted
+        expr: rate(container_last_seen{name=~"epr-.*"}[5m]) > 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container restarting frequently"
+          description: "Container {{ $labels.name }} has restarted {{ $value }} times in the last 5 minutes"

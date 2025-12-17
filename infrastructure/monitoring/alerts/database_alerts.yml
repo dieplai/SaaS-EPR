@@ -1,0 +1,63 @@
+# ============================================
+# Database Alerts
+# ============================================
+# PostgreSQL and Redis monitoring
+# (Requires exporters to be added)
+# ============================================
+
+groups:
+  - name: postgresql
+    interval: 30s
+    rules:
+      # Too many connections
+      - alert: PostgresTooManyConnections
+        expr: sum(pg_stat_activity_count) > (pg_settings_max_connections * 0.8)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL has too many connections"
+          description: "Database is using {{ $value }} connections (80% of max)"
+
+      # Database size growing too fast
+      - alert: PostgresDatabaseSizeGrowth
+        expr: rate(pg_database_size_bytes[1h]) > 1073741824  # 1GB per hour
+        for: 1h
+        labels:
+          severity: info
+        annotations:
+          summary: "Database growing rapidly"
+          description: "Database size increased by {{ $value | humanize1024 }}B in the last hour"
+
+      # Slow queries
+      - alert: PostgresSlowQueries
+        expr: rate(pg_stat_activity_max_tx_duration{datname!~"template.*"}[5m]) > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow queries detected"
+          description: "Queries taking more than 60 seconds detected on {{ $labels.datname }}"
+
+  - name: redis
+    interval: 30s
+    rules:
+      # High memory usage
+      - alert: RedisHighMemoryUsage
+        expr: (redis_memory_used_bytes / redis_memory_max_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis is using {{ $value | humanize }}% of max memory"
+
+      # Too many rejected connections
+      - alert: RedisRejectedConnections
+        expr: rate(redis_rejected_connections_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis rejecting connections"
+          description: "Redis has rejected {{ $value }} connections in the last 5 minutes"
