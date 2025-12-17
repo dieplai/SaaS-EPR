@@ -78,24 +78,30 @@ echo -e "${GREEN}OK: Environment file generated at $ENV_FILE${NC}"
 export DEPLOY_ENV="$ENV"
 
 # Pull latest images
-echo -e "${YELLOW}[4/7] Pulling Docker images from registry${NC}"
+echo -e "${YELLOW}[4/8] Pulling Docker images from registry${NC}"
 cd "$PROJECT_ROOT"
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file ".env.$ENV" pull
 echo -e "${GREEN}OK: Images pulled successfully${NC}"
 
-# Deploy
-echo -e "${YELLOW}[5/8] Deploying services${NC}"
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file ".env.$ENV" up -d --remove-orphans
-echo -e "${GREEN}OK: Services deployed${NC}"
-
-# Database setup (idempotent - safe to run multiple times)
-echo -e "${YELLOW}[6/8] Setting up databases${NC}"
+# Database setup BEFORE deploying services (critical for password sync)
+echo -e "${YELLOW}[5/8] Setting up databases${NC}"
 if "$PROJECT_ROOT/infrastructure/scripts/setup-database.sh"; then
   echo -e "${GREEN}OK: Database setup completed${NC}"
 else
   echo -e "${RED}ERROR: Database setup failed${NC}"
   exit 1
 fi
+
+# Deploy services (backend will connect with updated password)
+echo -e "${YELLOW}[6/8] Deploying services${NC}"
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file ".env.$ENV" up -d --remove-orphans
+echo -e "${GREEN}OK: Services deployed${NC}"
+
+# Restart backend to reconnect with updated password
+echo -e "${YELLOW}Restarting backend to apply database changes${NC}"
+docker restart epr-backend
+sleep 3
+echo -e "${GREEN}OK: Backend restarted${NC}"
 
 # Health checks
 echo -e "${YELLOW}[7/8] Running health checks${NC}"
