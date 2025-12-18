@@ -1,161 +1,158 @@
-# NGINX + SSL Setup Guide
+# NGINX Native Setup - Production Infrastructure
 
 ## Architecture
 
 ```
-User Request
-    ↓
-epr.dieplai.io.vn (HTTPS)
-    ↓
-NGINX Reverse Proxy (Port 80/443)
-    ↓
-┌─────────────────────────────────────┐
-│  Path-based Routing:                │
-│  /           → Frontend (port 3000) │
-│  /api/*      → Backend (port 8001)  │
-│  /chat/*     → Chatbot (port 8000)  │
-└─────────────────────────────────────┘
+VPS (103.47.226.171)
+│
+├─ NGINX Native (/etc/nginx/)           # Entry point
+│  ├─ sites-available/
+│  │  ├─ staging.epr.dieplai.io.vn     # Staging config
+│  │  └─ epr.dieplai.io.vn             # Production config
+│  └─ sites-enabled/                    # Active sites (symlinks)
+│
+├─ Certbot Native (/etc/letsencrypt/)   # SSL certificates
+│  ├─ live/staging.epr.dieplai.io.vn/
+│  └─ live/epr.dieplai.io.vn/
+│
+└─ Docker Containers (App Services)
+   ├─ Staging (ports: 3000, 8000, 8001)
+   └─ Production (ports: 3100, 8100, 8101)
 ```
 
-## DNS Setup
+## Setup (One-time manual setup on VPS)
 
-Thêm record này vào DNS provider:
-
-```
-Type: A
-Host: epr
-Value: 103.47.226.171
-TTL: 0 (Auto)
-```
-
-Verify DNS đã hoạt động:
+### 1. Install NGINX & Certbot
 ```bash
-nslookup epr.dieplai.io.vn
-# Should return: 103.47.226.171
+apt update
+apt install nginx certbot python3-certbot-nginx -y
 ```
 
-## First-Time Setup (trên VPS)
+### 2. Deploy NGINX configs
+NGINX configs are versioned in Git at `infrastructure/nginx/sites-available/`.
 
-### 1. Deploy application (không có SSL)
+**Copy to VPS:**
 ```bash
 cd /opt/epr-saas
-./infrastructure/scripts/deploy.sh staging
+
+# Staging
+cp infrastructure/nginx/sites-available/staging.epr.dieplai.io.vn \
+   /etc/nginx/sites-available/
+
+# Production
+cp infrastructure/nginx/sites-available/epr.dieplai.io.vn \
+   /etc/nginx/sites-available/
+
+# Enable sites
+ln -sf /etc/nginx/sites-available/staging.epr.dieplai.io.vn /etc/nginx/sites-enabled/
+ln -sf /etc/nginx/sites-available/epr.dieplai.io.vn /etc/nginx/sites-enabled/
+
+# Remove default
+rm -f /etc/nginx/sites-enabled/default
+
+# Test and reload
+nginx -t && systemctl reload nginx
 ```
 
-### 2. Setup SSL với Let's Encrypt
+### 3. Get SSL certificates
 ```bash
-cd /opt/epr-saas
-./infrastructure/scripts/setup-ssl.sh
+# Staging
+certbot certonly --webroot -w /var/www/certbot \
+  -d staging.epr.dieplai.io.vn \
+  --email your@email.com --agree-tos --no-eff-email
+
+# Production
+certbot certonly --webroot -w /var/www/certbot \
+  -d epr.dieplai.io.vn \
+  --email your@email.com --agree-tos --no-eff-email
 ```
 
-Script sẽ tự động:
-- Tạo certificate directories
-- Start NGINX tạm thời cho HTTP validation
-- Request SSL certificate từ Let's Encrypt
-- Restart NGINX với HTTPS config
-- Tạo auto-renewal script
-
-### 3. Setup auto-renewal (chạy 1 lần duy nhất)
+### 4. SSL auto-renewal
+Certbot automatically sets up renewal. Verify:
 ```bash
-# Thêm vào crontab để auto-renew mỗi tuần
-crontab -e
-
-# Add this line:
-0 0 * * 0 /opt/epr-saas/infrastructure/scripts/renew-ssl.sh
+systemctl list-timers | grep certbot
+certbot renew --dry-run
 ```
 
-## Testing
+## Workflow
 
-### Test HTTP → HTTPS redirect
+### Development (Local)
 ```bash
-curl -I http://epr.dieplai.io.vn
-# Should return: 301 Moved Permanently
+docker-compose -f docker-compose.yml up
+# Access: http://localhost:3000
 ```
 
-### Test HTTPS
+### Staging/Production (VPS)
 ```bash
-curl -I https://epr.dieplai.io.vn
-# Should return: 200 OK
+git push origin main  # Triggers GitHub Actions
+# → Build images
+# → Push to GHCR
+# → Deploy to VPS
+# → NGINX proxies traffic
 ```
 
-### Test API routing
-```bash
-# Backend API
-curl https://epr.dieplai.io.vn/api/health
-# Should return backend health response
+## NGINX Routing
 
-# Chatbot API
-curl https://epr.dieplai.io.vn/chat/health
-# Should return chatbot health response
+### Staging (staging.epr.dieplai.io.vn)
+- `/` → `http://localhost:3000` (Frontend)
+- `/api/*` → `http://localhost:8001` (Backend)
+- `/chat/*` → `http://localhost:8000` (Chatbot)
+
+### Production (epr.dieplai.io.vn)
+- `/` → `http://localhost:3100` (Frontend)
+- `/api/*` → `http://localhost:8101` (Backend)
+- `/chat/*` → `http://localhost:8100` (Chatbot)
+
+## Benefits of NGINX Native
+
+✅ **Performance:** No Docker overhead
+✅ **Stability:** SystemD managed, auto-restart
+✅ **SSL Management:** Certbot integration
+✅ **Industry Standard:** Standard DevOps practice
+✅ **Logs:** `/var/log/nginx/`
+
+## Adding New Projects
+
+When adding a new project (e.g., `newproject.dieplai.io.vn`):
+
+1. **Create NGINX config** in Git:
+```bash
+cp infrastructure/nginx/sites-available/staging.epr.dieplai.io.vn \
+   infrastructure/nginx/sites-available/newproject.dieplai.io.vn
+# Edit server_name and ports
+```
+
+2. **Commit to Git**
+3. **On VPS:**
+```bash
+cp infrastructure/nginx/sites-available/newproject.dieplai.io.vn \
+   /etc/nginx/sites-available/
+ln -s /etc/nginx/sites-available/newproject.dieplai.io.vn /etc/nginx/sites-enabled/
+nginx -t && systemctl reload nginx
+certbot certonly --webroot -w /var/www/certbot -d newproject.dieplai.io.vn
 ```
 
 ## Troubleshooting
 
-### Certificate request fails
+### Check NGINX status
 ```bash
-# Check DNS is pointing correctly
-nslookup epr.dieplai.io.vn
-
-# Check port 80 is accessible
-nc -zv 103.47.226.171 80
-
-# Check NGINX logs
-docker logs epr-nginx
-
-# Check Certbot logs
-docker logs epr-certbot
+systemctl status nginx
+nginx -t
 ```
 
-### NGINX fails to start
+### Check logs
 ```bash
-# Test NGINX config
-docker exec epr-nginx nginx -t
-
-# Check NGINX error logs
-docker logs epr-nginx --tail 100
+tail -f /var/log/nginx/staging.epr.access.log
+tail -f /var/log/nginx/staging.epr.error.log
 ```
 
-## Manual Certificate Renewal
-
+### Check SSL certificates
 ```bash
-cd /opt/epr-saas
-./infrastructure/scripts/renew-ssl.sh
+certbot certificates
+ls -la /etc/letsencrypt/live/
 ```
 
-## File Structure
-
-```
-infrastructure/
-├── nginx/
-│   ├── nginx.conf                    # Main NGINX config
-│   ├── conf.d/
-│   │   └── epr.dieplai.io.vn.conf   # Site config (path routing)
-│   └── README.md                     # This file
-├── certbot/
-│   ├── conf/                         # SSL certificates (auto-generated)
-│   └── www/                          # ACME challenge files
-└── scripts/
-    ├── setup-ssl.sh                  # First-time SSL setup
-    └── renew-ssl.sh                  # Auto-renewal script
-```
-
-## Security Features
-
-- ✅ Auto HTTP → HTTPS redirect
-- ✅ TLS 1.2 and TLS 1.3 only
-- ✅ Strong cipher suites
-- ✅ HSTS enabled (1 year)
-- ✅ X-Frame-Options, X-XSS-Protection headers
-- ✅ Auto-renewal every 12 hours (certificate expires in 90 days)
-
-## Internal Service Communication
-
-**CRITICAL:** Services communicate internally via Docker network, NOT through public domain!
-
-```yaml
-# ❌ WRONG - Don't do this
-Backend calls Chatbot: https://epr.dieplai.io.vn/chat/...
-
-# ✅ CORRECT - Internal Docker network
-Backend calls Chatbot: http://epr-ai-chatbot-api:8000/...
+### Reload config after changes
+```bash
+nginx -t && systemctl reload nginx
 ```

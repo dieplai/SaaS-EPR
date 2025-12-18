@@ -1,0 +1,158 @@
+# ============================================
+# STAGING - staging.epr.dieplai.io.vn
+# ============================================
+# Location: /etc/nginx/sites-available/staging.epr.dieplai.io.vn
+# Enable: ln -s /etc/nginx/sites-available/staging.epr.dieplai.io.vn /etc/nginx/sites-enabled/
+# ============================================
+
+# HTTP - Redirect to HTTPS
+server {
+    listen 80;
+    listen [::]:80;
+    server_name staging.epr.dieplai.io.vn;
+
+    # Let's Encrypt ACME challenge
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # Redirect all other traffic to HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS - Main staging application
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name staging.epr.dieplai.io.vn;
+
+    # SSL Configuration
+    ssl_certificate /etc/letsencrypt/live/staging.epr.dieplai.io.vn/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/staging.epr.dieplai.io.vn/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/staging.epr.dieplai.io.vn/chain.pem;
+
+    # SSL Security Settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+    ssl_session_tickets off;
+
+    # OCSP Stapling
+    ssl_stapling on;
+    ssl_stapling_verify on;
+    resolver 8.8.8.8 8.8.4.4 valid=300s;
+    resolver_timeout 5s;
+
+    # Security Headers
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # Logging
+    access_log /var/log/nginx/staging.epr.access.log;
+    error_log /var/log/nginx/staging.epr.error.log;
+
+    # ============================================
+    # Backend API - /api/*
+    # ============================================
+    location /api/ {
+        # Remove /api prefix before forwarding to backend
+        rewrite ^/api/(.*) /$1 break;
+
+        # Proxy to Docker container exposed on host
+        proxy_pass http://localhost:8001;
+        proxy_http_version 1.1;
+
+        # Headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+
+        # Timeouts
+        proxy_connect_timeout 30s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+
+        # Buffer settings
+        proxy_buffering off;
+        proxy_request_buffering off;
+    }
+
+    # ============================================
+    # AI Chatbot API - /chat/*
+    # ============================================
+    location /chat/ {
+        # Remove /chat prefix before forwarding
+        rewrite ^/chat/(.*) /$1 break;
+
+        # Proxy to chatbot container
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+
+        # Headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Longer timeout for AI processing
+        proxy_connect_timeout 120s;
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+
+        # Disable buffering for streaming responses
+        proxy_buffering off;
+    }
+
+    # WebSocket support for chatbot
+    location /chat/ws {
+        rewrite ^/chat/ws/(.*) /ws/$1 break;
+
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ============================================
+    # Frontend - / (default, must be last)
+    # ============================================
+    location / {
+        # Proxy to Next.js frontend
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+
+        # WebSocket support for Next.js HMR
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+
+        # Next.js timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # Deny access to hidden files
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+}
