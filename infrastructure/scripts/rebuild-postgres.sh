@@ -42,8 +42,16 @@ echo -e "${YELLOW}[2/4] Removing corrupted volume${NC}"
 docker volume rm epr-saas-platform_postgres_data || true
 echo -e "${GREEN}OK: Volume removed${NC}"
 
-# Recreate PostgreSQL with fresh volume
+# Recreate PostgreSQL with fresh volume (need password env var)
 echo -e "${YELLOW}[3/4] Recreating PostgreSQL container${NC}"
+
+# Check if POSTGRES_PASSWORD is set
+if [ -z "$POSTGRES_PASSWORD" ]; then
+  echo -e "${RED}ERROR: POSTGRES_PASSWORD environment variable not set${NC}"
+  echo "Set it first: export POSTGRES_PASSWORD='your_password'"
+  exit 1
+fi
+
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres
 echo -e "${GREEN}OK: PostgreSQL recreated${NC}"
 
