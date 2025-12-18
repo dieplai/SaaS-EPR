@@ -35,8 +35,4 @@ services:
     container_name: epr-web-frontend-prod
     ports:
       - "3100:3000"  # Host:Container
-    environment:
-      # Override browser URLs for production (accessed via NGINX)
-      - NEXT_PUBLIC_BROWSER_API_URL=https://epr.dieplai.io.vn/api
-      - NEXT_PUBLIC_BROWSER_CHATBOT_URL=https://epr.dieplai.io.vn/chat
-      - NEXT_PUBLIC_APP_URL=https://epr.dieplai.io.vn
+    # Note: NEXT_PUBLIC_ vars are baked into image at build time, not runtime

@@ -89,6 +89,10 @@ jobs:
         with:
           context: ./web
           push: true
+          build-args: |
+            NEXT_PUBLIC_BROWSER_API_URL=${{ steps.env.outputs.name == 'production' && 'https://epr.dieplai.io.vn/api' || 'https://staging.epr.dieplai.io.vn/api' }}
+            NEXT_PUBLIC_BROWSER_CHATBOT_URL=${{ steps.env.outputs.name == 'production' && 'https://epr.dieplai.io.vn/chat' || 'https://staging.epr.dieplai.io.vn/chat' }}
+            NEXT_PUBLIC_APP_URL=${{ steps.env.outputs.name == 'production' && 'https://epr.dieplai.io.vn' || 'https://staging.epr.dieplai.io.vn' }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-web:${{ steps.env.outputs.name }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-web:${{ steps.env.outputs.name }}-${{ github.sha }}

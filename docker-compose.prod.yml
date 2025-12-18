@@ -32,8 +32,4 @@ services:
     build: null
     ports:
       - "3000:3000"  # Expose to host for NGINX native to proxy
-    environment:
-      # Override browser URLs for staging (accessed via NGINX)
-      - NEXT_PUBLIC_BROWSER_API_URL=https://staging.epr.dieplai.io.vn/api
-      - NEXT_PUBLIC_BROWSER_CHATBOT_URL=https://staging.epr.dieplai.io.vn/chat
-      - NEXT_PUBLIC_APP_URL=https://staging.epr.dieplai.io.vn
+    # Note: NEXT_PUBLIC_ vars are baked into image at build time, not runtime
