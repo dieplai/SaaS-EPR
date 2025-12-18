@@ -39,7 +39,7 @@ echo -e "${GREEN}OK: Container stopped${NC}"
 
 # Remove corrupted volume
 echo -e "${YELLOW}[2/4] Removing corrupted volume${NC}"
-docker volume rm epr-saas-platform_postgres_data || true
+docker volume rm epr_postgres_data || true
 echo -e "${GREEN}OK: Volume removed${NC}"
 
 # Recreate PostgreSQL with fresh volume (need password env var)
