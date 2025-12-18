@@ -30,3 +30,38 @@ services:
   web-frontend:
     image: ghcr.io/dieplai/saas-epr-web:${DEPLOY_ENV:-staging}
     build: null
+
+  # ============================================
+  # NGINX - Reverse Proxy
+  # ============================================
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: epr-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./infrastructure/certbot/conf:/etc/letsencrypt:ro
+      - ./infrastructure/certbot/www:/var/www/certbot:ro
+    depends_on:
+      - epr-backend
+      - ai-chatbot-api
+      - web-frontend
+    networks:
+      - epr-network
+
+  # ============================================
+  # CERTBOT - SSL Certificate Management
+  # ============================================
+  certbot:
+    image: certbot/certbot:latest
+    container_name: epr-certbot
+    volumes:
+      - ./infrastructure/certbot/conf:/etc/letsencrypt
+      - ./infrastructure/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - epr-network
