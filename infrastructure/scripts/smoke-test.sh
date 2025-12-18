@@ -14,8 +14,23 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+# Detect environment
+ENV=${1:-staging}
+if [ -f ".env.$ENV" ]; then
+  source ".env.$ENV" 2>/dev/null || true
+fi
+
+# Set ports based on environment
+if [ "$ENV" = "production" ]; then
+  BACKEND_PORT=8101
+  CHATBOT_PORT=8100
+else
+  BACKEND_PORT=8001
+  CHATBOT_PORT=8000
+fi
+
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}Smoke Test - Starting${NC}"
+echo -e "${GREEN}Smoke Test - Starting ($ENV)${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 ALL_PASSED=true
@@ -44,17 +59,17 @@ run_test() {
 
 # Test 1: Backend health endpoint
 run_test "Backend Health" \
-  "curl -s -o /dev/null -w '%{http_code}' http://localhost:8001/health" \
+  "curl -s -o /dev/null -w '%{http_code}' http://localhost:$BACKEND_PORT/health" \
   "200"
 
 # Test 2: Backend packages endpoint
 run_test "Backend Packages List" \
-  "curl -s -o /dev/null -w '%{http_code}' http://localhost:8001/api/v1/packages" \
+  "curl -s -o /dev/null -w '%{http_code}' http://localhost:$BACKEND_PORT/api/v1/packages" \
   "200"
 
 # Test 3: Chatbot health endpoint
 run_test "Chatbot Health" \
-  "curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/health" \
+  "curl -s -o /dev/null -w '%{http_code}' http://localhost:$CHATBOT_PORT/health" \
   "200"
 
 # Test 4: Web frontend (if accessible from localhost)
@@ -66,7 +81,7 @@ run_test "Chatbot Health" \
 # Test 5: Database connectivity (via backend)
 # This tests that backend can connect to DB
 run_test "Database Connectivity" \
-  "curl -s -o /dev/null -w '%{http_code}' http://localhost:8001/api/v1/packages" \
+  "curl -s -o /dev/null -w '%{http_code}' http://localhost:$BACKEND_PORT/api/v1/packages" \
   "200"
 
 echo -e "${GREEN}========================================${NC}"

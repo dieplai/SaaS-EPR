@@ -17,9 +17,25 @@ NC='\033[0m'
 # Configuration
 MAX_RETRIES=10
 RETRY_INTERVAL=5
+
+# Detect environment from .env file or argument
+ENV=${1:-staging}
+if [ -f ".env.$ENV" ]; then
+  source ".env.$ENV" 2>/dev/null || true
+fi
+
+# Set ports based on environment
+if [ "$ENV" = "production" ]; then
+  BACKEND_PORT=8101
+  CHATBOT_PORT=8100
+else
+  BACKEND_PORT=8001
+  CHATBOT_PORT=8000
+fi
+
 SERVICES=(
-  "Backend:http://localhost:8001/health"
-  "Chatbot:http://localhost:8000/health"
+  "Backend:http://localhost:$BACKEND_PORT/health"
+  "Chatbot:http://localhost:$CHATBOT_PORT/health"
 )
 
 echo -e "${GREEN}========================================${NC}"

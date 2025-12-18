@@ -113,7 +113,7 @@ echo -e "${GREEN}OK: Backend restarted${NC}"
 
 # Health checks
 echo -e "${YELLOW}[7/8] Running health checks${NC}"
-if "$PROJECT_ROOT/infrastructure/scripts/health-check.sh"; then
+if "$PROJECT_ROOT/infrastructure/scripts/health-check.sh" "$ENV"; then
   echo -e "${GREEN}OK: Health checks passed${NC}"
 else
   echo -e "${RED}ERROR: Health checks failed - rolling back${NC}"
@@ -123,7 +123,7 @@ fi
 
 # Smoke tests
 echo -e "${YELLOW}[8/8] Running smoke tests${NC}"
-if "$PROJECT_ROOT/infrastructure/scripts/smoke-test.sh"; then
+if "$PROJECT_ROOT/infrastructure/scripts/smoke-test.sh" "$ENV"; then
   echo -e "${GREEN}OK: Smoke tests passed${NC}"
 else
   echo -e "${RED}ERROR: Smoke tests failed - rolling back${NC}"
