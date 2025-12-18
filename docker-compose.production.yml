@@ -1,0 +1,40 @@
+# ============================================
+# EPR SaaS - PRODUCTION ENVIRONMENT OVERRIDE
+# ============================================
+# Production-specific configuration
+# Runs alongside staging with different ports
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.production.yml up
+# ============================================
+
+services:
+  # ============================================
+  # BACKEND - Production ports
+  # ============================================
+  epr-backend:
+    container_name: epr-backend-prod
+    ports:
+      - "8101:8001"  # Host:Container
+
+  # ============================================
+  # CHATBOT - Production ports
+  # ============================================
+  ai-chatbot-api:
+    container_name: epr-ai-chatbot-prod
+    ports:
+      - "8100:8000"  # Host:Container
+
+  ai-chatbot-ui:
+    container_name: epr-ai-chatbot-ui-prod
+    ports:
+      - "8601:8501"  # Host:Container
+
+  # ============================================
+  # FRONTEND - Production ports
+  # ============================================
+  web-frontend:
+    container_name: epr-web-frontend-prod
+    ports:
+      - "3100:3000"  # Host:Container
+    environment:
+      - NEXT_PUBLIC_API_URL=https://epr.dieplai.io.vn/api
+      - NEXT_PUBLIC_CHAT_URL=https://epr.dieplai.io.vn/chat

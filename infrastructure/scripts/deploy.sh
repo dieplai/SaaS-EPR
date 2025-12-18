@@ -94,12 +94,20 @@ fi
 
 # Deploy services (backend will connect with updated password)
 echo -e "${YELLOW}[6/8] Deploying services${NC}"
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file ".env.$ENV" up -d --remove-orphans
+if [ "$ENV" = "production" ]; then
+  # Production: Use additional production compose file for different ports
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.production.yml --env-file ".env.$ENV" up -d --remove-orphans
+  BACKEND_CONTAINER="epr-backend-prod"
+else
+  # Staging: Standard deployment
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file ".env.$ENV" up -d --remove-orphans
+  BACKEND_CONTAINER="epr-backend"
+fi
 echo -e "${GREEN}OK: Services deployed${NC}"
 
 # Restart backend to reconnect with updated password
 echo -e "${YELLOW}Restarting backend to apply database changes${NC}"
-docker restart epr-backend
+docker restart $BACKEND_CONTAINER
 sleep 3
 echo -e "${GREEN}OK: Backend restarted${NC}"
 
