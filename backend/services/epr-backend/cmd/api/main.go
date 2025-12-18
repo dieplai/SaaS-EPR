@@ -27,6 +27,8 @@ import (
 	subscriptionhttp "github.com/epr-legal/epr-backend/internal/subscription/presentation/http"
 	subscriptionhandler "github.com/epr-legal/epr-backend/internal/subscription/presentation/http/handler"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -180,6 +182,119 @@ func setupRouter(env string) *gin.Engine {
 	return gin.Default()
 }
 
-func runMigrations(db interface{}) error {
+func runMigrations(db *gorm.DB) error {
+	// Run auto-migrations for all models
+	if err := db.AutoMigrate(
+		&identityinfra.UserModel{},
+		&subscriptioninfra.PackageModel{},
+		&subscriptioninfra.SubscriptionModel{},
+		&subscriptioninfra.SystemSettingModel{},
+	); err != nil {
+		return fmt.Errorf("failed to run auto-migrations: %w", err)
+	}
+
+	// Create default system settings if they don't exist
+	if err := createDefaultSystemSettings(db); err != nil {
+		return fmt.Errorf("failed to create default system settings: %w", err)
+	}
+
+	// Create default packages if they don't exist
+	if err := createDefaultPackages(db); err != nil {
+		return fmt.Errorf("failed to create default packages: %w", err)
+	}
+
+	return nil
+}
+
+func createDefaultSystemSettings(db *gorm.DB) error {
+	settings := []subscriptioninfra.SystemSettingModel{
+		{
+			ID:           uuid.New(),
+			SettingKey:   "token_reset_enabled",
+			SettingValue: "true",
+			Description:  "Enable automatic token reset for subscriptions",
+			ValueType:    "boolean",
+		},
+		{
+			ID:           uuid.New(),
+			SettingKey:   "token_reset_schedule",
+			SettingValue: "0 0 1 * *",
+			Description:  "Cron schedule for token reset (default: first day of month at midnight)",
+			ValueType:    "string",
+		},
+		{
+			ID:           uuid.New(),
+			SettingKey:   "free_account_token_limit",
+			SettingValue: "100",
+			Description:  "Default token limit for free accounts",
+			ValueType:    "integer",
+		},
+	}
+
+	for _, setting := range settings {
+		var existing subscriptioninfra.SystemSettingModel
+		if err := db.Where("setting_key = ?", setting.SettingKey).First(&existing).Error; err == gorm.ErrRecordNotFound {
+			if err := db.Create(&setting).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func createDefaultPackages(db *gorm.DB) error {
+	packages := []subscriptioninfra.PackageModel{
+		{
+			ID:           uuid.New(),
+			Name:         "Free",
+			Description:  "Free tier with basic features",
+			Price:        0,
+			TokenLimit:   100,
+			DurationDays: 30,
+			Features:     subscriptioninfra.FeatureArray{"Basic AI Chat", "100 tokens/month"},
+			IsActive:     true,
+		},
+		{
+			ID:           uuid.New(),
+			Name:         "Starter",
+			Description:  "Perfect for individuals and small teams",
+			Price:        99000,
+			TokenLimit:   1000,
+			DurationDays: 30,
+			Features:     subscriptioninfra.FeatureArray{"AI Chat", "Document Analysis", "1000 tokens/month"},
+			IsActive:     true,
+		},
+		{
+			ID:           uuid.New(),
+			Name:         "Professional",
+			Description:  "For growing businesses",
+			Price:        299000,
+			TokenLimit:   5000,
+			DurationDays: 30,
+			Features:     subscriptioninfra.FeatureArray{"AI Chat", "Document Analysis", "Priority Support", "5000 tokens/month"},
+			IsActive:     true,
+		},
+		{
+			ID:           uuid.New(),
+			Name:         "Enterprise",
+			Description:  "For large organizations with custom needs",
+			Price:        999000,
+			TokenLimit:   20000,
+			DurationDays: 30,
+			Features:     subscriptioninfra.FeatureArray{"AI Chat", "Document Analysis", "Priority Support", "Custom Integration", "20000 tokens/month"},
+			IsActive:     true,
+		},
+	}
+
+	for _, pkg := range packages {
+		var existing subscriptioninfra.PackageModel
+		if err := db.Where("name = ?", pkg.Name).First(&existing).Error; err == gorm.ErrRecordNotFound {
+			if err := db.Create(&pkg).Error; err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }

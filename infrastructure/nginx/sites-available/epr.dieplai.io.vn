@@ -61,8 +61,8 @@ server {
     # Backend API - /api/*
     # ============================================
     location /api/ {
-        # Remove /api prefix before forwarding to backend
-        rewrite ^/api/(.*) /$1 break;
+        # Rewrite /api/* to /api/v1/* (backend expects /api/v1 prefix)
+        rewrite ^/api/(.*) /api/v1/$1 break;
 
         # Proxy to production backend container (port 8101)
         proxy_pass http://localhost:8101;
