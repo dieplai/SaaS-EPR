@@ -2,10 +2,8 @@
 // API Client - Cookie-based Authentication
 // ============================================
 
-// Use relative URLs - NGINX proxy handles routing to backend
-// This eliminates CORS issues and works across all environments
-const API_URL = '/api';
-const CHATBOT_URL = '/chat';
+// Import centralized config
+import { API_URL, CHATBOT_URL } from './config';
 
 // ============================================
 // Types
@@ -342,7 +340,7 @@ export const chatbotAPI = {
       'Content-Type': 'application/json',
     };
 
-    const response = await fetch(`${CHATBOT_URL}/api/chat`, {
+    const response = await fetch(CHATBOT_URL, {
       method: 'POST',
       headers,
       credentials: 'include', // Send cookies automatically
@@ -429,7 +427,7 @@ export const chatbotAPI = {
     };
 
     // Fetch streaming response
-    const response = await fetch(`${CHATBOT_URL}/api/chat`, {
+    const response = await fetch(CHATBOT_URL, {
       method: 'POST',
       headers,
       credentials: 'include', // Send cookies automatically

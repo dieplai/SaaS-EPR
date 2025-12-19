@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
+import { API_URL } from "@/lib/config";
 import {
   LayoutDashboard,
   Users,
@@ -58,8 +59,6 @@ interface PackageFormData {
   duration_days: number;
   is_active: boolean;
 }
-
-const API_URL = '/api';
 
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_URL}${endpoint}`, {

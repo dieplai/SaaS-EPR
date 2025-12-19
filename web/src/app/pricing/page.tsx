@@ -10,6 +10,7 @@ import {
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { useAuth } from "@/contexts/auth-context";
+import { API_URL } from "@/lib/config";
 
 interface Package {
   id: string;
@@ -21,8 +22,6 @@ interface Package {
   features?: string[];
   is_active: boolean;
 }
-
-const API_URL = '/api';
 
 export default function PricingPage() {
   const router = useRouter();
