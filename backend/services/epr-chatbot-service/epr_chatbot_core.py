@@ -55,6 +55,9 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 import uuid
 
+# Import improved prompts
+from improved_prompts import format_legal_prompt, format_faq_prompt
+
 # ========== TOKEN COUNTING UTILITIES ==========
 
 def count_tokens(text: str, model: str = "gpt-3.5-turbo") -> int:
@@ -130,126 +133,39 @@ else:
 
 collection_name = "faq_collection"
 
-# ========== FAQ DATA ==========
-
-faq = {
-    "meta": [
-        {
-            "Câu hỏi": "Kiến thức của bạn bao gồm những gì?",
-            "Trả lời": "Kiến thức của tôi bao gồm các điều luật của văn bản pháp luật về EPR của Việt Nam"
-        },
-        {
-            "Câu hỏi": "Các đối tượng nào phải thực hiện trách nhiệm tái chế?",
-            "Trả lời": "Theo Điều 77 và Phụ lục XXII Nghị định số 08/2022/NĐ-CP quy định chi tiết một số điều của Luật Bảo vệ môi trường, các tổ chức sản xuất, nhập khẩu sản phẩm, bao bì phải thực hiện trách nhiệm tái chế."
-        },
-        {
-            "Câu hỏi": "Bao bì thương phẩm được hiểu như thế nào?",
-            "Trả lời": "Theo Điều 3 Nghị định số 43/2017/NĐ-CP của Chính phủ về nhãn hàng hóa, bao bì thương phẩm là..."
-        },
-        {
-            "Câu hỏi": "Khi nào nhà sản xuất, nhập khẩu sản phẩm, bao bì phải thực hiện trách nhiệm tái chế?",
-            "Trả lời": "Theo khoản 4 Điều 77 Nghị định số 08/2022/NĐ-CP thì nhà sản xuất, nhập khẩu sản phẩm phải thực hiện..."
-        }
-    ]
-}
-
-# ========== RECREATE COLLECTION FUNCTION ==========
-
-def recreate_faq_collection(force=False):
-    """
-    Recreate FAQ collection with fresh embeddings
-
-    Args:
-        force: If True, delete existing collection and recreate
-    """
-    print("="*80)
-    print("🔄 FAQ COLLECTION SETUP")
-    print("="*80)
-
-    try:
-        # Check if collection exists
-        existing_collections = client.get_collections().collections
-        collection_exists = any(col.name == collection_name for col in existing_collections)
-
-        if collection_exists:
-            if force:
-                print(f"🗑️  Deleting existing collection '{collection_name}'...")
-                client.delete_collection(collection_name)
-                print(f"✅ Deleted old collection")
-            else:
-                print(f"✅ Collection '{collection_name}' already exists")
-                count = client.get_collection(collection_name).points_count
-                print(f"   Points in collection: {count}")
-                print("💡 Set force=True to recreate with fresh embeddings")
-                return True
-
-        # Create collection
-        print(f"📝 Creating collection '{collection_name}'...")
-        sample_emb = embeddings.embed_query("test")
-        dim = len(sample_emb)
-
-        client.create_collection(
-            collection_name=collection_name,
-            vectors_config=VectorParams(size=dim, distance=Distance.COSINE)
-        )
-        print(f"✅ Created collection (dimension: {dim})")
-
-        # Add FAQ documents with fresh embeddings
-        print(f"📄 Adding {len(faq['meta'])} FAQ documents...")
-        points = []
-
-        for idx, item in enumerate(faq["meta"], 1):
-            question = item["Câu hỏi"]
-            answer = item["Trả lời"]
-
-            print(f"   {idx}. Embedding: {question[:50]}...")
-            vector = embeddings.embed_query(question)
-
-            point = PointStruct(
-                id=str(uuid.uuid4()),
-                vector=vector,
-                payload={
-                    "Câu_hỏi": question,
-                    "Trả_lời": answer
-                }
-            )
-            points.append(point)
-
-        # Upload all at once
-        client.upsert(collection_name=collection_name, points=points)
-        print(f"✅ Added {len(points)} documents to collection")
-
-        # Verify
-        count = client.get_collection(collection_name).points_count
-        print(f"✅ Verified: Collection has {count} points")
-        print("="*80)
-
-        return True
-
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        print("="*80)
-        return False
+# ========== FAQ DATA - Using Qdrant Cloud ==========
+# FAQ data is now stored in Qdrant Cloud (faq_collection)
+# No local hardcoded data needed
 
 # ========== RETRIEVAL FUNCTION ==========
 
-def retrieve_faq_top1(query: str, score_threshold: float = 0.6):
-    """Retrieve top 1 FAQ with detailed scoring info"""
+def retrieve_faq_top1(query: str, score_threshold: float = 0.75, keyword_boost: float = 0.3):
+    """
+    Retrieve top 1 FAQ using hybrid approach: semantic + keyword matching
+    
+    Args:
+        query: User's question
+        score_threshold: Minimum combined score to accept a match
+        keyword_boost: Weight for keyword matching (0.0 - 1.0)
+        
+    Returns:
+        List containing the best matching Document, or empty list if no match
+    """
     print(f"\n{'='*80}")
-    print(f"🔍 FAQ RETRIEVAL")
+    print(f"🔍 FAQ RETRIEVAL (HYBRID: Semantic + Keyword)")
     print(f"{'='*80}")
     print(f"Query: {query}")
-    print(f"Threshold: {score_threshold}")
+    print(f"Threshold: {score_threshold} | Keyword Boost: {keyword_boost}")
     print(f"{'-'*80}")
 
-    # Get query embedding
+    # Get query embedding for semantic search
     query_vector = embeddings.embed_query(query)
 
-    # Search
+    # Search with more candidates for re-ranking
     results = client.query_points(
         collection_name=collection_name,
         query=query_vector,
-        limit=3  # Get top 3 to see scores
+        limit=5  # Get more candidates to re-rank
     )
 
     if not results or not results.points:
@@ -257,46 +173,112 @@ def retrieve_faq_top1(query: str, score_threshold: float = 0.6):
         print(f"{'='*80}\n")
         return []
 
-    # Show all top matches
-    print(f"  📊 Top matches:")
-    for i, point in enumerate(results.points, 1):
-        score = point.score
-        question = point.payload['Câu_hỏi']
-        status = "✅ PASS" if score >= score_threshold else "❌ FAIL"
-        print(f"     {i}. {status} Score: {score:.4f} - {question[:50]}...")
+    # Tokenize query for keyword matching
+    query_tokens = _tokenize_vietnamese(query)
+    print(f"  🔤 Query tokens: {query_tokens}")
+    print(f"{'-'*80}")
 
-    # Get best match
-    best_point = results.points[0]
-    best_score = best_point.score
+    # Calculate hybrid scores for all candidates
+    scored_results = []
+    for point in results.points:
+        semantic_score = point.score
+        question = point.payload['Câu_hỏi']
+        question_tokens = _tokenize_vietnamese(question)
+        
+        # Calculate keyword overlap (Jaccard-like similarity)
+        if query_tokens:
+            overlap_count = len(query_tokens & question_tokens)
+            keyword_score = overlap_count / len(query_tokens)
+        else:
+            keyword_score = 0.0
+        
+        # Combined score: semantic + keyword boost
+        final_score = semantic_score + (keyword_boost * keyword_score)
+        
+        scored_results.append({
+            'point': point,
+            'semantic_score': semantic_score,
+            'keyword_score': keyword_score,
+            'keyword_matches': query_tokens & question_tokens,
+            'final_score': final_score
+        })
+
+    # Re-rank by final combined score
+    scored_results.sort(key=lambda x: x['final_score'], reverse=True)
+
+    # Display top matches with detailed scoring
+    print(f"  📊 Top matches (re-ranked by hybrid score):")
+    for i, r in enumerate(scored_results[:5], 1):
+        status = "✅ PASS" if r['final_score'] >= score_threshold else "❌ FAIL"
+        print(f"     {i}. {status}")
+        print(f"        Semantic: {r['semantic_score']:.4f} | Keyword: {r['keyword_score']:.4f} | Final: {r['final_score']:.4f}")
+        print(f"        Matched words: {r['keyword_matches'] if r['keyword_matches'] else 'None'}")
+        print(f"        Q: {r['point'].payload['Câu_hỏi'][:70]}...")
+        print()
 
     print(f"{'-'*80}")
+
+    # Get best match after re-ranking
+    best = scored_results[0]
+    best_point = best['point']
+    best_score = best['final_score']
 
     if best_score >= score_threshold:
         doc = Document(
             page_content=best_point.payload["Trả_lời"],
             metadata={
                 "Câu_hỏi": best_point.payload["Câu_hỏi"],
-                "score": best_score
+                "score": best_score,
+                "semantic_score": best['semantic_score'],
+                "keyword_score": best['keyword_score']
             }
         )
-        print(f"  ✅ Returning match (score: {best_score:.4f} >= {score_threshold})")
+        print(f"  ✅ Returning match (final_score: {best_score:.4f} >= {score_threshold})")
+        print(f"     Semantic: {best['semantic_score']:.4f} + Keyword boost: {keyword_boost * best['keyword_score']:.4f}")
         print(f"{'='*80}\n")
         return [doc]
     else:
         print(f"  ⚠️  Best score {best_score:.4f} < threshold {score_threshold}")
-        print(f"  💡 Try threshold={best_score:.2f} or lower")
+        print(f"  💡 Suggestions:")
+        print(f"     - Try threshold={best_score:.2f} or lower")
+        print(f"     - Increase keyword_boost if query has specific terms")
         print(f"{'='*80}\n")
         return []
 
-# ========== RUN SETUP ==========
 
-print("🚀 Initializing FAQ system...")
-print()
+def _tokenize_vietnamese(text: str) -> set:
+    """
+    Tokenize Vietnamese text for keyword matching
+    
+    Args:
+        text: Input text
+        
+    Returns:
+        Set of lowercase tokens (words)
+    """
+    # Convert to lowercase
+    text = text.lower()
+    
+    # Remove punctuation but keep Vietnamese characters
+    text = re.sub(r'[^\w\s]', ' ', text)
+    
+    # Split into words
+    words = text.split()
+    
+    # Remove common stopwords (expand this list as needed)
+    stopwords = {
+        'là', 'và', 'của', 'có', 'được', 'trong', 'cho', 'với', 'các',
+        'này', 'đó', 'những', 'để', 'khi', 'từ', 'theo', 'về', 'như',
+        'thì', 'mà', 'nhưng', 'hoặc', 'nếu', 'vì', 'do', 'bởi', 'tại',
+        'đã', 'đang', 'sẽ', 'còn', 'cũng', 'rất', 'lại', 'nên', 'phải',
+        'bạn', 'tôi', 'chúng', 'họ', 'nó', 'gì', 'nào', 'sao', 'bao'}
+    
+    # Filter out stopwords and very short words
+    tokens = {w for w in words if w not in stopwords and len(w) > 1}
+    
+    return tokens
 
-# Only recreate if doesn't exist (force=False for faster loading)
-recreate_faq_collection(force=False)  # Set to False to skip if already exists
-
-print("✅ FAQ system ready!")
+# ========== INITIALIZE LLM ==========
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -307,125 +289,8 @@ llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
 
 print("✅ LLM initialized for answer generation")
 
-# ========== ANSWER GENERATION FUNCTION ==========
-
-def generate_answer_from_faq(query: str, documents: list):
-    """
-    Generate answer based on retrieved FAQ documents
-
-    Args:
-        query: User's original question
-        documents: List of Document objects from retrieve_faq_top1
-
-    Returns:
-        str: Generated answer
-    """
-    print(f"\n{'='*80}")
-    print(f"💬 GENERATING ANSWER FROM FAQ")
-    print(f"{'='*80}")
-    print(f"Query: {query}")
-    print(f"Documents: {len(documents)}")
-    print(f"{'-'*80}")
-
-    # If no documents, return default message
-    if not documents:
-        print("  ⚠️  No FAQ documents found, returning default message")
-        print(f"{'='*80}\n")
-        return "Xin lỗi, tôi không tìm thấy thông tin phù hợp trong FAQ. Bạn có thể hỏi câu hỏi khác hoặc cung cấp thêm chi tiết không?"
-
-    # Get the FAQ document
-    doc = documents[0]
-    faq_question = doc.metadata.get("Câu_hỏi", "")
-    faq_answer = doc.page_content
-
-    print(f"  📋 FAQ matched: {faq_question[:60]}...")
-    print(f"{'-'*80}")
-
-    # Create prompt for answer generation
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", """Bạn là trợ lý AI chuyên về luật EPR Việt Nam.
-
-Nhiệm vụ của bạn:
-1. Dựa vào câu hỏi FAQ và câu trả lời có sẵn
-2. Trả lời câu hỏi của người dùng một cách tự nhiên, thân thiện
-3. Giữ nguyên thông tin chính xác từ FAQ
-4. Có thể điều chỉnh cách diễn đạt cho phù hợp với câu hỏi của người dùng
-
-Quy tắc:
-- Trả lời bằng tiếng Việt
-- Giữ thông tin chính xác từ FAQ
-- Nếu câu hỏi người dùng khác một chút so với FAQ, hãy điều chỉnh câu trả lời cho phù hợp
-Nếu câu hỏi KHÔNG liên quan (ví dụ: nấu ăn, du lịch, thể thao, etc):"Tôi chỉ hỗ trợ các câu hỏi liên quan đến luật EPR của Việt Nam"
-- Trả lời ngắn gọn, rõ ràng"""),
-
-        ("""
-
-Câu hỏi FAQ tương tự: {faq_question}
-Câu trả lời FAQ: {faq_answer}
-
-Câu hỏi của người dùng: {user_question}
-
-Hãy trả lời câu hỏi của người dùng dựa trên thông tin FAQ trên:""")
-    ])
-
-    # Generate answer
-    chain = prompt | llm
-
-    result = chain.invoke({
-        "faq_question": faq_question,
-        "faq_answer": faq_answer,
-        "user_question": query
-    })
-
-    answer = result.content
-
-    print(f"  ✅ Answer generated")
-    print(f"{'='*80}\n")
-
-    return answer
-
-
-# ========== COMPLETE FAQ RAG PIPELINE ==========
-
-def faq_rag_pipeline(query: str, score_threshold: float = 0.6):
-    """
-    Complete FAQ RAG pipeline: Retrieve + Generate
-
-    Args:
-        query: User question
-        score_threshold: Minimum similarity score for retrieval
-        chat_history: Optional chat history
-
-    Returns:
-        dict: {
-            "answer": str,
-            "documents": list[Document],
-            "source": str ("faq" or "not_found")
-        }
-    """
-    print(f"\n{'#'*80}")
-    print(f"🤖 FAQ RAG PIPELINE")
-    print(f"{'#'*80}")
-    print(f"Query: {query}")
-    print(f"{'#'*80}\n")
-
-    # Step 1: Retrieve FAQ documents
-    documents = retrieve_faq_top1(query, score_threshold=score_threshold)
-
-    # Step 2: Generate answer
-    answer = generate_answer_from_faq(query, documents)
-
-    # Step 3: Return result
-    result = {
-        "answer": answer,
-        "documents": documents,
-    }
-
-    print(f"{'#'*80}")
-    print(f"✅ PIPELINE COMPLETE")
-    print(f"{'#'*80}\n")
-
-    return result
+# ========== OLD FAQ PIPELINE REMOVED ==========
+# Old synchronous FAQ pipeline removed (replaced by optimized_chatbot_pipeline)
 
 
 
@@ -819,7 +684,7 @@ def retrieve_faq_node(state):
     print(f"  Question: {question}")
 
     # Use your existing retrieve_faq_top1 function
-    documents = retrieve_faq_top1(question, score_threshold=0.6)
+    documents = retrieve_faq_top1(question, score_threshold=0.75)
 
     print(f"  Documents found: {len(documents)}")
     print("="*80 + "\n")
@@ -952,616 +817,32 @@ def decide_after_retrieve_faq(state):
 
 
 
-data={"meta":[
-{
-  "Điều": "Điều 1. Phạm vi điều chỉnh",
-  "Chương": "Chương I. NHỮNG QUY ĐỊNH CHUNG",
-  "Mục": "",
-  "Pages": "2",
-  "Text": "Nghị định này quy định chi tiết khoản 4 Điều 9; khoản 5 Điều 13; khoản 4 Điều 14; khoản 4 Điều 15; khoản 3 Điều 20; khoản 4 Điều 21; khoản 4 Điều 23; khoản 2 Điều 24; khoản 3 Điều 25; khoản 7 Điều 28; khoản 7 Điều 33; khoản 7 Điều 37; khoản 6 Điều 43; khoản 6 Điều 44; khoản 5 Điều 46; khoản 8 Điều 49; khoản 6 Điều 51; khoản 4 Điều 52; khoản 4 Điều 53; khoản 5 Điều 54; khoản 5 Điều 55; khoản 7 Điều 56; khoản 3 Điều 59; khoản 5 Điều 61; khoản 1 Điều 63; khoản 7 Điều 65; khoản 7 Điều 67; điểm d khoản 2 Điều 69; khoản 2 Điều 70; khoản 3 Điều 71; khoản 8 Điều 72; khoản 7 Điều 73; khoản 4 Điều 78; khoản 3, khoản 4 Điều 79; khoản 3 Điều 80; khoản 5 Điều 85; khoản 1 Điều 86; khoản 1 Điều 105; khoản 4 Điều 110; khoản 7 Điều 111; khoản 7 Điều 112; khoản 4 Điều 114; khoản 3 Điều 115; điểm a khoản 2 Điều 116; khoản 7 Điều 121; khoản 4 Điều 131; khoản 4 Điều 132; khoản 4 Điều 135; khoản 5 Điều 137; khoản 5 Điều 138; khoản 2 Điều 140; khoản 5 Điều 141; khoản 4 Điều 142; khoản 3 Điều 143; khoản 5 Điều 144; khoản 4 Điều 145; khoản 2 Điều 146; khoản 7 Điều 148; khoản 5 Điều 149; khoản 5 Điều 150; khoản 3 Điều 151; khoản 4 Điều 158; khoản 6 Điều 160; khoản 4 Điều 167; khoản 6 Điều 171 Luật Bảo vệ môi trường về bảo vệ các thành phần môi trường; phân vùng môi trường, đánh giá môi trường chiến lược, đánh giá tác động môi trường; giấy phép môi trường, đăng ký môi trường; bảo vệ môi trường trong hoạt động sản xuất, kinh doanh, dịch vụ, đô thị, nông thôn và một số lĩnh vực; quản lý chất thải; trách nhiệm tài chế, xử lý sản phẩm, bao bì của tổ chức, cá nhân sản xuất, nhập khẩu; quan trắc môi trường; hệ thống thông tin, cơ sở dữ liệu về môi trường; phòng ngừa, ứng phó sự cố môi trường, bồi thường thiệt hại về môi trường; công cụ kinh tế và nguồn lực bảo vệ môi trường; quản lý nhà nước, kiểm tra, thanh tra và cung cấp dịch vụ công trực tuyến về bảo vệ môi trường."
-},
-{
-  "Điều": "Điều 2. Đối tượng áp dụng",
-  "Chương": "Chương I. NHỮNG QUY ĐỊNH CHUNG",
-  "Mục": "",
-  "Pages": "2",
-  "Text": "Nghị định này áp dụng đối với cơ quan, tổ chức, cộng đồng dân cư, hộ gia đình và cá nhân có hoạt động liên quan đến các nội dung quy định tại Điều 1 Nghị định này trên lãnh thổ nước Cộng hòa xã hội chủ nghĩa Việt Nam, bao gồm đất liền, hải đảo, vùng biển, lòng đất và vùng trời."
-},
-{
-  "Điều": "Điều 3. Giải thích từ ngữ",
-  "Chương": "Chương I. NHỮNG QUY ĐỊNH CHUNG",
-  "Mục": "",
-  "Pages": "2,3,4,5,6",
-  "Text": """Trong Nghị định này, các từ ngữ dưới đây được hiểu như sau:
-  1. Hệ thống thu gom, thoát nước mưa của cơ sở sản xuất, kinh doanh, dịch vụ gồm mạng lưới thu gom, thoát nước (đường ống, hố ga, cống, kênh, mương, hồ điều hòa), các trạm bơm thoát nước mưa và các công trình phụ trợ khác nhằm mục đích thu gom, chuyển tải, tiêu thoát nước mưa, chống ngập úng.
-  2. Hệ thống thu gom, xử lý, thoát nước thải của cơ sở sản xuất, kinh doanh, dịch vụ gồm mạng lưới thu gom nước thải (đường ống, hố ga, cống),các trạm bơm nước thải, các công trình xử lý nước thải và các công trình phụ trợ nhằm mục đích thu gom,xử lý nước thải và thoát nước thải sau xử lý vào môi trường tiếp nhận.
-  3. Công trình, thiết bị xử lý chất thải tại chỗ là các công trình, thiết bị được sản xuất, lắp ráp sẵn hoặc được xây dựng tại chỗ để xử lý nước thải, khí thải của cơ sở sản xuất, kinh doanh, dịch vụ quy mô hộ gia đình; công viên,
-      khu vui chơi, giải trí, khu kinh doanh, dịch vụ tập trung, chợ, nhà ga, bến xe, bến tàu, bến cảng, bến phà và khu vực công cộng khác; hộ gia đình, cá nhân có phát sinh nước thải, khí thải phải xử lý theo quy định của pháp luật về bảo vệ môi trường.
-  4. Nước trao đổi nhiệt là nước phục vụ mục đích giải nhiệt (nước làm mát) hoặc gia nhiệt cho thiết bị, máy móc trong quá trình sản xuất, không tiếp xúc trực tiếp với nguyên liệu, vật liệu, nhiên liệu, hóa chất sử dụng trong các công đoạn sản xuất.
-  5. Tự xử lý chất thải là hoạt động xử lý chất thải do chủ nguồn thải thực hiện trong khuôn viên cơ sở phát sinh chất thải bằng các hạng mục,
-  dây chuyền sản xuất hoặc công trình bảo vệ môi trường đáp ứng yêu cầu về bảo vệ môi trường.
-  6. Tái sử dụng chất thải là việc sử dụng lại chất thải một cách trực tiếp hoặc sử dụng sau khi đã sơ chế. Sơ chế chất thải là việc sử dụng các biện pháp
-  kỹ thuật cơ - lý đơn thuần nhằm thay đổi tính chất vật lý như kích thước, độ ẩm, nhiệt độ để tạo điều kiện thuận lợi cho việc phân loại, lưu giữ, vận chuyển, tái sử dụng, tái chế, đồng xử lý, xử lý nhằm phối trộn hoặc tách riêng các thành phần của chất thải cho phù hợp với các quy trình quản lý khác nhau.
-  7. Tái chế chất thải là quá trình sử dụng các giải pháp công nghệ, kỹ thuật để thu lại các thành phần có giá trị từ chất thải.
-  8. Xử lý chất thải là quá trình sử dụng các giải pháp công nghệ, kỹ thuật (khác với sơ chế) để làm giảm, loại bỏ, cô lập, cách ly, thiêu đốt, tiêu hủy, chôn lấp chất thải và các yếu tố có hại trong chất thải.
-  9. Nước thải là nước đã bị thay đổi đặc điểm, tính chất được thải ra từ hoạt động sản xuất, kinh doanh, dịch vụ, sinh hoạt hoặc hoạt động khác.
-  10. Chất thải rắn thông thường là chất thải rắn không thuộc danh mục chất thải nguy hại và không thuộc danh mục chất thải công nghiệp phải kiểm soát có yếu tố nguy hại vượt ngưỡng chất thải nguy hại.
-  11. Chất thải rắn sinh hoạt (còn gọi là rác thải sinh hoạt) là chất thải rắn
-  phát sinh trong sinh hoạt thường ngày của con người.
-  12. Chất thải công nghiệp là chất thải phát sinh từ hoạt động sản xuất,
-  kinh doanh, dịch vụ, trong đó bao gồm chất thải nguy hại, chất thải công
-  nghiệp phải kiểm soát và chất thải rắn công nghiệp thông thường.
-  13. Vi nhựa trong sản phẩm, hàng hóa là các hạt nhựa rắn, không tan
-  trong nước có đường kính nhỏ hơn 05 mm với thành phần chính là polyme
-  tổng hợp hoặc bán tổng hợp, được phối trộn có chủ đích trong các sản phẩm,
-  hàng hóa bao gồm: kem đánh răng, bột giặt, xà phòng, mỹ phẩm, dầu gội đầu,
-  sữa tắm, sữa rửa mặt và các sản phẩm tẩy da khác.
-  14. Sản phẩm nhựa sử dụng một lần là các sản phẩm (trừ sản phẩm gắn
-  kèm không thể thay thế) bao gồm khay, hộp chứa đựng thực phẩm, bát, đũa,
-  ly, cốc, dao, thìa, dĩa, ống hút, dụng cụ ăn uống khác có thành phần nhựa
-  được thiết kế và đưa ra thị trường với chủ đích để sử dụng một lần trước khi
-  thải bỏ ra môi trường.
-  15. Bao bì nhựa khó phân hủy sinh học là bao bì có thành phần chính là
-  polyme có nguồn gốc từ dầu mỏ như nhựa Polyme Etylen (PE), Polypropylen
-  (PP), Polyme Styren (PS), Polyme Vinyl Clorua (PVC), Polyethylene
-  Terephthalate (PET) và thường khó phân hủy, lâu phân hủy trong môi trường
-  thải bỏ (môi trường nước, môi trường đất hoặc tại bãi chôn lấp chất thải rắn).
-  16. Khu bảo tồn thiên nhiên bao gồm vườn quốc gia, khu dự trữ thiên
-  nhiên, khu bảo tồn loài - sinh cảnh và khu bảo vệ cảnh quan được xác lập theo
-  quy định của pháp luật về đa dạng sinh học, lâm nghiệp và thủy sản.
-  17. Hàng hoá môi trường là công nghệ, thiết bị, sản phẩm được sử dụng
-  để bảo vệ môi trường.
-  18. Hệ thống thông tin môi trường là một hệ thống đồng bộ theo một
-  kiến trúc tổng thể bao gồm con người, máy móc thiết bị, kỹ thuật, dữ liệu và
-  các chương trình làm nhiệm vụ thu nhận, xử lý, lưu trữ và phân phối thông tin
-  về môi trường cho người sử dụng trong một môi trường nhất định.
-  19. Hạn ngạch xả nước thải là tải lượng của từng thông số ô nhiễm có
-  thể tiếp tục xả vào môi trường nước.
-  20. Nguồn ô nhiễm điểm là nguồn thải trực tiếp chất ô nhiễm vào môi
-  trường phải được xử lý và có tính chất đơn lẻ, có vị trí xác định.
-  21. Nguồn ô nhiễm diện là nguồn thải chất ô nhiễm vào môi trường, có
-  tính chất phân tán, không có vị trí xác định.
-  22. Cơ sở thực hiện dịch vụ xử lý chất thải là cơ sở có hoạt động xử lý
-  chất thải (bao gồm cả hoạt động tái chế, đồng xử lý chất thải) cho các hộ gia
-  đình, cá nhân, cơ quan, tổ chức, cơ sở sản xuất, kinh doanh, dịch vụ, khu sản
-  xuất, kinh doanh, dịch vụ tập trung, cụm công nghiệp.
-  23. Nước thải phải xử lý là nước thải nếu không xử lý thì không đáp
-  ứng quy chuẩn kỹ thuật môi trường, quy chuẩn kỹ thuật, hướng dẫn kỹ thuật,quy định để tái sử dụng khi đáp ứng yêu cầu về bảo vệ môi trường hoặc quy định của chủ đầu tư xây dựng và kinh doanh hạ tầng khu sản xuất, kinh doanh, dịch vụ tập trung, cụm công nghiệp, hệ thống xử lý nước thải tập trung của khu đô thị, khu dân cư tập trung.
-  24. Nguồn phát sinh nước thải là hệ thống, công trình, máy móc, thiết bị, công đoạn hoặc hoạt động có phát sinh nước thải. Nguồn phát sinh nước thải có thể bao gồm nhiều hệ thống, công trình, máy móc, thiết bị, công đoạn hoặc hoạt động có phát sinh nước thải cùng tính chất và cùng khu vực.
-  25. Dòng nước thải là nước thải sau xử lý hoặc phải được kiểm soát trước khi xả ra nguồn tiếp nhận nước thải tại một vị trí xả thải xác định.
-  26. Nguồn tiếp nhận nước thải (còn gọi là nguồn nước tiếp nhận) là các dạng tích tụ nước tự nhiên, nhân tạo có mục đích sử dụng xác định do cơ quan nhà nước có thẩm quyền quy định. Các dạng tích tụ nước tự nhiên bao gồm sông, suối, kênh, mương, rạch, hồ, ao, đầm, phá và các dạng tích tụ nước khác được hình thành tự nhiên. Các dạng tích tụ nước nhân tạo, bao gồm: Hồ chứa thủy điện, thủy lợi, sông, kênh, mương, rạch, hồ, ao, đầm và các dạng tích tụ nước khác do con người tạo ra.
-  Trường hợp nguồn nước tại vị trí xả nước thải chưa được cơ quan nhà nước có thẩm quyền xác định mục đích sử dụng thì nguồn tiếp nhận nước thải là nguồn nước liền thông gần nhất đã được xác định mục đích sử dụng.
-  27. Bụi, khí thải phải xử lý là bụi, khí thải nếu không xử lý thì không đáp ứng quy chuẩn kỹ thuật môi trường.
-  28. Nguồn phát sinh bụi, khí thải (sau đây gọi chung là nguồn phát sinh khí thải) là hệ thống, công trình, máy móc, thiết bị, công đoạn hoặc hoạt động có phát sinh bụi, khí thải và có vị trí xác định. Trường hợp nhiều hệ thống, công trình, máy móc, thiết bị tại cùng một khu vực có phát sinh bụi, khí thải có cùng tính chất và được thu gom, xử lý chung tại một hệ thống xử lý khí thải thì được coi là một nguồn khí thải.
-
-  29.Dòng khí thải là khí thải sau khi xử lý được xả vào môi trường không khí thông qua ống khói, ống thải.
-  30.Hoạt động sản xuất, kinh doanh, dịch vụ là hoạt động của tổ chức, cá nhân thực hiện để sản xuất, kinh doanh, dịch vụ, không bao gồm hoạt động dịch vụ hành chính công khi xem xét cấp giấy phép môi trường.
-  31.Dự án có sử dụng đất, đất có mặt nước là dự án được giao đất, cho thuê đất theo quy định của pháp luật về đất đai hoặc dự án được triển khai trên đất, đất có mặt nước theo quy định của pháp luật có liên quan.
-  32.Báo cáo đánh giá tác động môi trường đã được phê duyệt kết quả thẩm định là:
-  a) Báo cáo đánh giá tác động môi trường đã được cơ quan có thẩm quyền ra quyết định phê duyệt kết quả thẩm định, trừ trường hợp được quy định tại điểm b khoản này;
-  b) Báo cáo đánh giá tác động môi trường đã được chỉnh sửa, bổ sung theo nội dung, yêu cầu về bảo vệ môi trường được nêu trong quyết định phê duyệt kết quả thẩm định báo cáo đánh giá tác động môi trường theo quy định tại khoản 1 Điều 37 Luật Bảo vệ môi trường."""
-    },
-  {
-  "Điều": "Điều 4. Nội dung kế hoạch quản lý chất lượng môi trường nước mặt",
-  "Chương": "Chương II BẢO VỆ CÁC THÀNH PHẦN MÔI TRƯỜNG VÀ DI SẢN THIÊN NHIÊN",
-  "Mục": "Mục 1 BẢO VỆ MÔI TRƯỜNG NƯỚC",
-  "Pages": "6,7,8,9",
-  "Text": """Nội dung chính của kế hoạch quản lý chất lượng nước mặt được quy định tại khoản 2 Điều 9 Luật Bảo vệ môi trường. Một số nội dung được quy định chi tiết như sau:
-        1. Về đánh giá chất lượng môi trường nước mặt; xác định vùng bảo hộ
-vệ sinh khu vực lấy nước sinh hoạt, hành lang bảo vệ nguồn nước mặt; xác
-định khu vực sinh thủy:
-a) Hiện trạng, diễn biến chất lượng môi trường nước mặt đối với sông,
-hồ giai đoạn tối thiểu 03 năm gần nhất;
-b) Tổng hợp hiện trạng các vùng bảo hộ vệ sinh khu vực lấy nước sinh
-hoạt, hành lang bảo vệ nguồn nước mặt, nguồn sinh thủy đã được xác định
-theo quy định của pháp luật về tài nguyên nước.
-2. Về loại và tổng lượng chất ô nhiễm thải vào môi trường nước mặt:
-a) Kết quả tổng hợp, đánh giá tổng tải lượng của từng chất ô nhiễm
-được lựa chọn để đánh giá khả năng chịu tải đối với môi trường nước mặt từ
-các nguồn ô nhiễm điểm, nguồn ô nhiễm diện đã được điều tra, đánh giá theo
-quy định tại điểm b khoản 2 Điều 9 Luật Bảo vệ môi trường;
-b) Dự báo tình hình phát sinh tải lượng ô nhiễm từ các nguồn ô nhiễm
-điểm, nguồn ô nhiễm diện trong thời kỳ của kế hoạch.
-3. Về đánh giá khả năng chịu tải, phân vùng xả thải, hạn ngạch xả nước
-thải:
-a) Tổng hợp kết quả đánh giá khả năng chịu tải của môi trường nước mặt
-trên cơ sở các kết quả đã có trong vòng tối đa 03 năm gần nhất và kết quả điều
-tra, đánh giá bổ sung; xác định lộ trình đánh giá khả năng chịu tải của môi
-trường nước mặt trong giai đoạn thực hiện kế hoạch quản lý chất lượng môi
-trường nước mặt;
-b) Phân vùng xả thải theo mục đích bảo vệ và cải thiện chất lượng môi
-trường nước mặt trên cơ sở kết quả đánh giá khả năng chịu tải của môi trường
-nước mặt và phân vùng môi trường (nếu có);
-c) Xác định hạn ngạch xả nước thải đối với từng đoạn sông, hồ trên cơ
-sở kết quả đánh giá khả năng chịu tải của môi trường nước mặt và việc phân
-vùng xả thải.
-4. Dự báo xu hướng diễn biến chất lượng môi trường nước mặt trên cơ
-sở các nội dung sau:
-a) Dự báo tình hình phát sinh tải lượng ô nhiễm từ các nguồn ô nhiễm
-điểm, ô nhiễm diện trong giai đoạn 05 năm tiếp theo;
-b) Kết quả thực hiện các nội dung quy định tại các khoản 1, 2 và 3
-Điều này.
-5. Về các mục tiêu, chỉ tiêu của kế hoạch:
-a) Mục tiêu, chỉ tiêu về chất lượng nước mặt cần đạt được cho giai đoạn
-05 năm đối với từng đoạn sông, hồ căn cứ nhu cầu thực tiễn về phát triển kinh
-tế - xã hội, bảo vệ môi trường; mục tiêu chất lượng nước của sông, hồ nội tỉnh
-phải phù hợp với mục tiêu chất lượng nước của sông, hồ liên tỉnh;
-b) Mục tiêu và lộ trình giảm xả thải vào các đoạn sông, hồ không còn
-khả năng chịu tải nhằm mục tiêu cải thiện chất lượng nước, cụ thể: tổng tải
-lượng ô nhiễm cần giảm đối với từng thông số ô nhiễm mà môi trường nước
-mặt không còn khả năng chịu tải; phân bổ tải lượng cần giảm theo nhóm
-nguồn ô nhiễm và lộ trình thực hiện.
-6. Về biện pháp phòng ngừa và giảm thiểu ô nhiễm môi trường nước
-mặt; giải pháp hợp tác, chia sẻ thông tin và quản lý ô nhiễm nước mặt xuyên
-biên giới:
-a) Các biện pháp quy định tại khoản 2 Điều 7 Luật Bảo vệ môi trường
-đối với đoạn sông, hồ không còn khả năng chịu tải;
-b) Các biện pháp, giải pháp bảo vệ các vùng bảo hộ vệ sinh khu vực lấy
-nước sinh hoạt, hành lang bảo vệ nguồn nước mặt, nguồn sinh thủy theo quy
-định của pháp luật về tài nguyên nước;
-c)13 Các biện pháp, giải pháp về cơ chế, chính sách để thực hiện lộ trình
-quy định tại khoản 5 Điều này;
-d) Các biện pháp, giải pháp kiểm soát các nguồn xả thải vào môi trường
-nước mặt;
-đ) Thiết lập hệ thống quan trắc, cảnh báo diễn biến chất lượng môi
-trường nước mặt, bao gồm cả chất lượng môi trường nước mặt xuyên biên
-giới, phù hợp với quy hoạch tổng thể quan trắc môi trường quốc gia và nội
-dung quan trắc môi trường trong quy hoạch vùng, quy hoạch tỉnh;
-e) Các biện pháp, giải pháp hợp tác, chia sẻ thông tin về chất lượng môi
-trường nước mặt xuyên biên giới;
-g) Các biện pháp, giải pháp khác.
-7. Về giải pháp bảo vệ, cải thiện chất lượng môi trường nước mặt:
-a) Các giải pháp về khoa học, công nghệ xử lý, cải thiện chất lượng môi
-trường nước mặt;
-b) Các giải pháp về cơ chế, chính sách;
-c) Các giải pháp về tổ chức, huy động sự tham gia của cơ quan, tổ
-chức, cộng đồng;
-d) Các giải pháp công trình, phi công trình khác.
-8. Tổ chức thực hiện:
-a) Phân công trách nhiệm đối với cơ quan chủ trì và các cơ quan phối
-hợp thực hiện kế hoạch;
-b) Cơ chế giám sát, báo cáo, đôn đốc thực hiện;
-c) Danh mục các dự án, nhiệm vụ ưu tiên để thực hiện các mục tiêu của
-kế hoạch;
-d) Cơ chế phân bổ nguồn lực thực hiện.
-"""
-  },
-{ "Điều": "Điều 5. Trình tự, thủ tục ban hành kế hoạch quản lý chất lượng môi trường nước mặt",
-  "Chương": "Chương II BẢO VỆ CÁC THÀNH PHẦN MÔI TRƯỜNG VÀ DI SẢN THIÊN NHIÊN",
-  "Mục": "Mục 1 BẢO VỆ MÔI TRƯỜNG NƯỚC",
-  "Pages": "9,10",
-  "Text": """1. Kế hoạch quản lý chất lượng môi trường nước mặt đối với các sông,
-hồ liên tỉnh có vai trò quan trọng với phát triển kinh tế - xã hội, bảo vệ môi
-trường được ban hành đối với từng sông, hồ liên tỉnh theo quy định sau:
-a) Bộ Tài nguyên và Môi trường chủ trì, phối hợp với các bộ, cơ quan
-ngang bộ, Ủy ban nhân dân cấp tỉnh có liên quan lập, phê duyệt, triển khai đề
-án điều tra, đánh giá, xây dựng dự thảo kế hoạch quản lý chất lượng môi
-trường nước mặt đối với từng sông, hồ liên tỉnh;
-b) Bộ Tài nguyên và Môi trường gửi dự thảo kế hoạch quản lý chất lượng môi trường nước mặt đối với từng sông, hồ liên tỉnh đến Ủy ban nhân dân cấp tỉnh và các bộ, cơ quan ngang bộ có liên quan để lấy ý kiến bằng văn bản; nghiên cứu, tiếp thu, giải trình các ý kiến góp ý, hoàn thiện dự thảo kế hoạch, trình Thủ tướng Chính phủ xem xét, ban hành. Hồ sơ trình Thủ tướng
-Chính phủ bao gồm: tờ trình; dự thảo kế hoạch; dự thảo quyết định ban hành kế hoạch; báo cáo giải trình, tiếp thu các ý kiến góp ý; văn bản góp ý của các cơ quan có liên quan;
-c) Căn cứ yêu cầu quản lý nhà nước và đề xuất của Ủy ban nhân dân
-cấp tỉnh, Bộ Tài nguyên và Môi trường xem xét, quyết định việc giao nhiệm
-vụ xây dựng kế hoạch quản lý chất lượng nước mặt đối với từng sông, hồ liên
-tỉnh cho Ủy ban nhân dân cấp tỉnh chủ trì, phối hợp với các địa phương, cơ
-quan có liên quan thực hiện.
-Ủy ban nhân dân cấp tỉnh được giao nhiệm vụ chủ trì thực hiện trách
-nhiệm của Bộ Tài nguyên và Môi trường trong việc xây dựng, lấy ý kiến và
-hoàn thiện dự thảo kế hoạch theo quy định tại điểm a và điểm b khoản này;
-gửi hồ sơ theo quy định tại điểm b khoản này đến Bộ Tài nguyên và Môi
-trường để xem xét, trình Thủ tướng Chính phủ ban hành.
-2. Kế hoạch quản lý chất lượng môi trường nước mặt đối với sông, hồ
-nội tỉnh có vai trò quan trọng với phát triển kinh tế - xã hội, bảo vệ môi
-trường được xây dựng chung cho toàn bộ sông, hồ nội tỉnh hoặc riêng cho
-từng sông, hồ nội tỉnh và theo quy định sau:
-a) Cơ quan chuyên môn về bảo vệ môi trường cấp tỉnh chủ trì, phối hợp
-với các sở, ban, ngành, Ủy ban nhân dân cấp huyện có liên quan lập, phê
-duyệt và thực hiện đề án điều tra, đánh giá, xây dựng dự thảo kế hoạch quản
-lý chất lượng môi trường nước mặt sông, hồ nội tỉnh;
-b) Cơ quan chuyên môn về bảo vệ môi trường cấp tỉnh gửi dự thảo kế
-hoạch quản lý chất lượng môi trường nước mặt sông, hồ nội tỉnh đến các Ủy
-ban nhân dân cấp huyện, các sở, ban, ngành liên quan và cơ quan chuyên môn
-về bảo vệ môi trường cấp tỉnh của các tỉnh, thành phố trực thuộc trung ương
-giáp ranh để lấy ý kiến bằng văn bản; nghiên cứu, tiếp thu, giải trình các ý
-kiến góp ý, hoàn thiện dự thảo kế hoạch, trình Ủy ban nhân dân cấp tỉnh xem
-xét, ban hành. Hồ sơ trình Ủy ban nhân dân cấp tỉnh bao gồm: tờ trình; dự
-thảo kế hoạch; dự thảo quyết định ban hành kế hoạch; báo cáo giải trình, tiếp
-thu các ý kiến góp ý; văn bản góp ý của các cơ quan có liên quan.
-3. Việc xác định sông, hồ có vai trò quan trọng với phát triển kinh tế -
-xã hội, bảo vệ môi trường được căn cứ vào hiện trạng chất lượng môi trường
-nước mặt, hiện trạng nguồn thải, nhu cầu sử dụng nguồn nước cho các mục
-đích phát triển kinh tế - xã hội, mục tiêu bảo vệ và cải thiện chất lượng môi
-trường nước mặt và các yêu cầu quản lý nhà nước về bảo vệ môi trường khác.
-4. Kế hoạch quản lý chất lượng môi trường nước mặt đối với các sông,
-hồ liên tỉnh phải phù hợp với quy hoạch bảo vệ môi trường quốc gia. Trường
-hợp quy hoạch bảo vệ môi trường quốc gia chưa được ban hành, kế hoạch
-quản lý chất lượng môi trường nước mặt đối với các sông, hồ liên tỉnh phải
-phù hợp với yêu cầu quản lý nhà nước và phải được rà soát, cập nhật phù hợp
-với quy hoạch bảo vệ môi trường quốc gia khi được ban hành.
-5. Kế hoạch quản lý chất lượng môi trường nước mặt đối với các sông,
-hồ nội tỉnh phải phù hợp với quy hoạch bảo vệ môi trường quốc gia, nội dung
-bảo vệ môi trường trong quy hoạch vùng, quy hoạch tỉnh. Trường hợp quy
-hoạch bảo vệ môi trường quốc gia, nội dung bảo vệ môi trường trong quy
-hoạch vùng, quy hoạch tỉnh chưa được ban hành, kế hoạch quản lý chất lượng
-môi trường nước mặt đối với các sông, hồ nội tỉnh phải phù hợp với yêu cầu
-quản lý nhà nước và phải được rà soát, cập nhật phù hợp với quy hoạch bảo
-vệ môi trường quốc gia, quy hoạch vùng, quy hoạch tỉnh khi được ban hành.
-6. Kế hoạch quản lý chất lượng môi trường nước mặt quy định tại khoản 1
-và khoản 2 Điều này phải được xây dựng phù hợp với kế hoạch phát triển
-kinh tế - xã hội 05 năm. Trước ngày 30 tháng 6 năm thứ tư của kế hoạch đầu
-tư công trung hạn giai đoạn trước, cơ quan phê duyệt kế hoạch chỉ đạo tổ
-chức tổng kết, đánh giá việc thực hiện kế hoạch kỳ trước, xây dựng, phê duyệt
-kế hoạch cho giai đoạn tiếp theo để làm cơ sở đề xuất kế hoạch đầu tư công
-trung hạn."""
-},
-
-{ "Điều": "Điều 6. Nội dung kế hoạch quốc gia về quản lý chất lượng môi trường không khí",
-  "Chương": "Chương II BẢO VỆ CÁC THÀNH PHẦN MÔI TRƯỜNG VÀ DI SẢN THIÊN NHIÊN",
-  "Mục": "Mục 2 BẢO VỆ MÔI TRƯỜNG KHÔNG KHÍ",
-  "Pages": "10,11,12",
-  "Text": """Nội dung chính của kế hoạch quốc gia về quản lý chất lượng môi
-trường không khí được quy định tại khoản 3 Điều 13 Luật Bảo vệ môi trường.
-Một số nội dung được quy định chi tiết như sau:
-1. Về đánh giá công tác quản lý, kiểm soát ô nhiễm không khí cấp quốc
-gia; nhận định các nguyên nhân chính gây ô nhiễm môi trường không khí:
-a) Hiện trạng, diễn biến chất lượng môi trường không khí quốc gia
-trong giai đoạn tối thiểu 03 năm gần nhất; tổng lượng phát thải gây ô nhiễm
-môi trường không khí và phân bố phát thải theo không gian từ các nguồn ô
-nhiễm điểm, nguồn ô nhiễm di động, nguồn ô nhiễm diện; ảnh hưởng của ô
-nhiễm môi trường không khí tới sức khỏe cộng đồng;
-b) Kết quả thực hiện các chương trình quan trắc chất lượng môi trường
-không khí, các trạm quan trắc tự động, liên tục chất lượng môi trường không
-khí và khí thải công nghiệp; việc sử dụng số liệu quan trắc phục vụ công tác
-đánh giá diễn biến và quản lý chất lượng môi trường không khí trong giai
-đoạn tối thiểu 03 năm gần nhất;
-c) Hiện trạng công tác quản lý chất lượng môi trường không khí cấp
-quốc gia giai đoạn tối thiểu 03 năm gần nhất; các vấn đề bất cập, tồn tại trong
-công tác quản lý chất lượng môi trường không khí;
-d) Nhận định các nguyên nhân chính gây ô nhiễm môi trường không khí.
-2. Mục tiêu quản lý chất lượng môi trường không khí:
-a) Mục tiêu tổng thể: tăng cường hiệu lực, hiệu quả quản lý chất lượng
-môi trường không khí phù hợp với kế hoạch phát triển kinh tế - xã hội, bảo vệ
-môi trường theo kỳ kế hoạch;
-b) Mục tiêu cụ thể: định lượng các chỉ tiêu nhằm giảm thiểu tổng lượng
-khí thải phát sinh từ các nguồn thải chính; cải thiện chất lượng môi trường
-không khí.
-3. Nhiệm vụ và giải pháp quản lý chất lượng môi trường không khí:
-a) Về cơ chế, chính sách;
-b) Về khoa học, công nghệ nhằm cải thiện chất lượng môi trường
-không khí;
-c) Về quản lý, kiểm soát chất lượng môi trường không khí.
-4. Chương trình, dự án ưu tiên để thực hiện các nhiệm vụ, giải pháp
-quy định tại khoản 3 Điều này.
-5. Quy chế phối hợp, biện pháp quản lý chất lượng môi trường không
-khí liên vùng, liên tỉnh phải thể hiện đầy đủ các nội dung, biện pháp phối hợp
-xử lý, quản lý chất lượng môi trường không khí; trách nhiệm của các cơ quan,
-tổ chức có liên quan trong công tác quản lý chất lượng môi trường không khí
-liên vùng, liên tỉnh, thu thập và báo cáo, công bố thông tin trong trường hợp
-chất lượng môi trường không khí bị ô nhiễm.
-6. Tổ chức thực hiện kế hoạch quốc gia về quản lý chất lượng môi
-trường không khí, bao gồm:
-a) Phân công trách nhiệm của cơ quan chủ trì và các cơ quan phối hợp
-trong việc thực hiện kế hoạch;
-b) Cơ chế giám sát, báo cáo, đôn đốc thực hiện;
-c) Danh mục các chương trình, dự án ưu tiên để thực hiện các nhiệm
-vụ, giải pháp của kế hoạch;
-d) Cơ chế phân bổ nguồn lực thực hiện."""
-},
- {"Điều": "Điều 7. Trình tự, thủ tục ban hành kế hoạch quốc gia về quản lý chất lượng môi trường không khí",
-  "Chương": "Chương II BẢO VỆ CÁC THÀNH PHẦN MÔI TRƯỜNG VÀ DI SẢN THIÊN NHIÊN",
-  "Mục": "Mục 2 BẢO VỆ MÔI TRƯỜNG KHÔNG KHÍ",
-  "Pages": "12",
-  "Text": """1. Kế hoạch quốc gia về quản lý chất lượng môi trường không khí được
-ban hành theo quy định sau:
-a) Bộ Tài nguyên và Môi trường chủ trì, phối hợp với các bộ, cơ quan
-ngang bộ, Ủy ban nhân dân cấp tỉnh có liên quan tổ chức lập, phê duyệt, triển
-khai đề án điều tra, đánh giá, xây dựng dự thảo kế hoạch quốc gia về quản lý
-chất lượng môi trường không khí;
-b) Bộ Tài nguyên và Môi trường gửi dự thảo kế hoạch quốc gia về quản
-lý chất lượng môi trường không khí đến Ủy ban nhân dân cấp tỉnh và các bộ,
-cơ quan ngang bộ có liên quan để lấy ý kiến góp ý bằng văn bản; nghiên cứu,
-tiếp thu, giải trình các ý kiến góp ý, hoàn thiện dự thảo kế hoạch, trình Thủ
-tướng Chính phủ xem xét, ban hành. Hồ sơ trình Thủ tướng Chính phủ bao
-gồm: tờ trình, dự thảo kế hoạch, dự thảo quyết định ban hành kế hoạch; báo
-cáo tổng hợp, giải trình tiếp thu dự thảo kế hoạch; văn bản góp ý của các cơ
-quan có liên quan.
-2. Kế hoạch quốc gia về quản lý chất lượng môi trường không khí phải
-phù hợp với quy hoạch bảo vệ môi trường quốc gia. Trường hợp quy hoạch
-bảo vệ môi trường quốc gia chưa được ban hành, kế hoạch quốc gia về quản
-lý chất lượng môi trường không khí phải phù hợp với yêu cầu quản lý nhà
-nước về bảo vệ môi trường và phải được rà soát, cập nhật phù hợp với quy
-hoạch bảo vệ môi trường quốc gia khi được ban hành.
-3. Kế hoạch quốc gia về quản lý chất lượng môi trường không khí được
-xây dựng phù hợp với kế hoạch phát triển kinh tế - xã hội 05 năm. Trước ngày
-30 tháng 6 năm thứ tư của kế hoạch đầu tư công trung hạn giai đoạn trước, cơ
-quan phê duyệt kế hoạch chỉ đạo tổ chức tổng kết, đánh giá việc thực hiện kế
-hoạch kỳ trước, xây dựng, phê duyệt kế hoạch cho giai đoạn tiếp theo để làm
-cơ sở đề xuất kế hoạch đầu tư công trung hạn."""
-},
-{"Điều": "Điều 8. Nội dung kế hoạch quản lý chất lượng môi trường không khí cấp tỉnh",
-  "Chương": "Chương II BẢO VỆ CÁC THÀNH PHẦN MÔI TRƯỜNG VÀ DI SẢN THIÊN NHIÊN",
-  "Mục": "Mục 2 BẢO VỆ MÔI TRƯỜNG KHÔNG KHÍ",
-  "Pages": "12,13",
-  "Text": """Nội dung chính của kế hoạch quản lý chất lượng môi trường không khí
-cấp tỉnh được quy định tại khoản 4 Điều 13 Luật Bảo vệ môi trường. Một số
-nội dung được quy định chi tiết như sau:
-1. Về đánh giá chất lượng môi trường không khí ở địa phương: hiện
-trạng chất lượng môi trường không khí khu vực đô thị, nông thôn và các khu
-vực khác.
-2. Về đánh giá công tác quản lý chất lượng môi trường không khí; quan
-trắc môi trường không khí; xác định và đánh giá các nguồn phát thải khí thải
-chính; kiểm kê phát thải; mô hình hóa chất lượng môi trường không khí; thực
-trạng và hiệu quả của các giải pháp quản lý chất lượng không khí đang thực
-hiện; hiện trạng các chương trình, hệ thống quan trắc; tổng hợp, xác định,
-đánh giá các nguồn phát thải chính (nguồn ô nhiễm điểm, nguồn ô nhiễm di
-động, nguồn ô nhiễm diện); thực hiện kiểm kê các nguồn phát thải chính và
-mô hình hóa chất lượng môi trường không khí.
-3. Phân tích, nhận định nguyên nhân gây ô nhiễm môi trường không
-khí: nguyên nhân khách quan từ các yếu tố khí tượng, thời tiết, khí hậu theo
-mùa, các vấn đề ô nhiễm liên tỉnh, xuyên biên giới (nếu có); nguyên nhân chủ
-quan từ hoạt động phát triển kinh tế - xã hội làm phát sinh các nguồn khí thải
-gây ô nhiễm không khí (nguồn ô nhiễm điểm, nguồn ô nhiễm di động,
-nguồn ô nhiễm diện).
-4 Về đánh giá ảnh hưởng của ô nhiễm không khí đến sức khỏe cộng đồng:
-thông tin, số liệu về số ca bệnh do ảnh hưởng của ô nhiễm không khí (nếu có); kết
-quả đánh giá ảnh hưởng của ô nhiễm không khí tới sức khỏe người dân tại địa
-phương.
-5. Mục tiêu và phạm vi quản lý chất lượng môi trường không khí: hiện
-trạng và diễn biến chất lượng môi trường không khí, hiện trạng công tác quản
-lý chất lượng môi trường không khí ở địa phương.
-6. Nhiệm vụ và giải pháp quản lý chất lượng môi trường không khí:
-a) Về cơ chế, chính sách;
-b) Về khoa học, công nghệ nhằm cải thiện chất lượng môi trường
-không khí;
-c) Về quản lý, kiểm soát chất lượng môi trường không khí.
-7. Tổ chức thực hiện kế hoạch quản lý chất lượng môi trường không
-khí cấp tỉnh, bao gồm:
-a) Phân công trách nhiệm của cơ quan chủ trì và các cơ quan phối hợp
-trong việc thực hiện kế hoạch;
-b) Cơ chế giám sát, báo cáo, đôn đốc thực hiện;
-c) Cơ chế phân bổ nguồn lực thực hiện.
-8. Ủy ban nhân dân cấp tỉnh tổ chức xây dựng kế hoạch quản lý chất
-lượng môi trường không khí cấp tỉnh theo hướng dẫn kỹ thuật của Bộ Tài
-nguyên và Môi trường."""
-    },
-
-    ]
-}
-
-import json
-import re
-from typing import Dict, Any, Optional
+# ========== LEGAL DATA - Using Qdrant Cloud ==========
+# Legal documents are now stored in Qdrant Cloud (law_collection)
+# No local hardcoded data needed
 
 
-def extract_number(prefix: str, text: str) -> Optional[int]:
-    """Generic function to extract number or Roman numeral after prefix (e.g., Điều 1, Chương II, Mục 3)"""
-    match = re.search(fr'{prefix}\s+([IVXLCDM\d]+)', text, re.IGNORECASE)
-    if not match:
-        return None
+# ========== LEGAL DATA VECTORSTORE - Using Qdrant Cloud ==========
 
-    value = match.group(1).strip().upper()
-
-    # Roman numeral lookup (extend as needed)
-    roman_to_int = {
-        'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5,
-        'VI': 6, 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10,
-        'XI': 11, 'XII': 12, 'XIII': 13, 'XIV': 14, 'XV': 15,
-        'XVI': 16, 'XVII': 17, 'XVIII': 18, 'XIX': 19, 'XX': 20
-    }
-
-    # Prioritize Roman numeral check
-    if value in roman_to_int:
-        return roman_to_int[value]
-
-    # Otherwise, try integer conversion
-    if value.isdigit():
-        return int(value)
-
-    # Fallback if neither
-    return None
-
-def extract_content(prefix: str, text: str) -> str:
-    """
-    Extract clean content after 'Chương X' or 'Mục 1' etc.
-    Removes the prefix and number even if there is no dot.
-    """
-    # Remove prefix and number part (e.g., 'Chương II', 'Mục 1', 'Điều 3')
-    content = re.sub(fr'^{prefix}\s+[IVXLCDM\d]+\.?\s*', '', text.strip(), flags=re.IGNORECASE)
-    return content.strip()
-
-def transform_data(input_data: Any) -> Dict[str, Any]:
-    """Transform JSON data by splitting Điều, Chương, and Mục"""
-    # Handle different input types
-    if isinstance(input_data, str):
-        try:
-            data = json.loads(input_data)
-        except json.JSONDecodeError:
-            with open(input_data, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-    else:
-        data = input_data
-
-    # Transform the meta array
-    if 'meta' in data and isinstance(data['meta'], list):
-        transformed_meta = []
-
-        for item in data['meta']:
-            transformed_item = {}
-
-            # --- Điều ---
-            if 'Điều' in item:
-                transformed_item['Điều'] = extract_number('Điều', item['Điều'])
-                transformed_item['Điều_Content'] = extract_content('Điều', item['Điều'])
-
-            # --- Chương ---
-            if 'Chương' in item:
-                transformed_item['Chương'] = extract_number('Chương', item['Chương'])
-                transformed_item['Chương_Content'] = extract_content('Chương', item['Chương'])
-
-            # --- Mục ---
-            if 'Mục' in item:
-                transformed_item['Mục'] = extract_number('Mục', item['Mục'])
-                transformed_item['Mục_Content'] = extract_content('Mục', item['Mục'])
-
-            # Other fields
-            if 'Pages' in item:
-                transformed_item['Pages'] = item['Pages']
-            if 'Text' in item:
-                transformed_item['Text'] = item['Text']
-
-            transformed_meta.append(transformed_item)
-
-        data['meta'] = transformed_meta
-
-    return data
-
-
-def save_transformed_data(output_path: str, transformed_data: Dict[str, Any], indent: int = 2):
-    """Save transformed data to JSON file"""
-    with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump(transformed_data, f, ensure_ascii=False, indent=indent)
-
-
-# Transform the legal data
-print("📊 Transforming legal document data...")
-transformed_data = transform_data(data)
-print(f"✅ Transformed {len(transformed_data.get('meta', []))} legal articles")
-
-# Example usage (for standalone testing)
-# if __name__ == "__main__":
-#     print("=== TRANSFORMED JSON ===")
-#     print(json.dumps(transformed_data, ensure_ascii=False, indent=2))
-#
-#     if transformed_data.get('meta'):
-#         first = transformed_data['meta'][0]
-#         print("\n=== EXAMPLE ACCESS ===")
-#         print(f"Điều: {first.get('Điều')} - {first.get('Điều_Content')}")
-#         print(f"Chương: {first.get('Chương')} - {first.get('Chương_Content')}")
-#         print(f"Mục: {first.get('Mục')} - {first.get('Mục_Content')}")
-
-
-from langchain_core.documents import Document
-from langchain.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from langchain_core.output_parsers import StrOutputParser
-
-# --- Prompt template ---
-query_str = """Hãy cung cấp một bản tóm tắt chi tiết bằng tiếng Việt về quy định pháp luật Việt Nam này, bao gồm:
-- Các yêu cầu hoặc quy định pháp lý chính được nêu ra
-- Những cá nhân, tổ chức hoặc đối tượng nào chịu sự điều chỉnh của quy định này
-- Các nghĩa vụ, quyền hoặc thủ tục quan trọng được quy định
-- Các điều kiện, ngoại lệ hoặc yêu cầu cụ thể đáng chú ý (nếu có)
-- Mục đích hoặc phạm vi tổng thể của quy định pháp luật này
-
-Vui lòng trình bày bản tóm tắt thành 3-4 đoạn văn bằng tiếng Việt, bảo đảm vừa đầy đủ vừa dễ đọc.
-"""
-
-# --- Convert transformed JSON into Document objects ---
-docs = []
-for item in transformed_data["meta"]:
-    metadata = {
-        "Điều": item.get("Điều", ""),
-        "Điều_Name": item.get("Điều_Content", ""),
-        "Chương": item.get("Chương", ""),
-        "Chương_Name": (item.get("Chương_Content", "")).lower(),
-        "Mục": item.get("Mục", ""),
-        "Mục_Name": (item.get("Mục_Content", "")).lower(),
-        "Pages": item.get("Pages", "")
-    }
-
-    doc = Document(
-        page_content=item.get("Text", ""),
-        metadata=metadata
-    )
-    docs.append(doc)
-
-# --- Chain definition ---
-chain = (
-    {"doc": lambda x: x.page_content}
-    | ChatPromptTemplate.from_template(f"{query_str}\n\nNội dung văn bản:\n\n{{doc}}")
-    | ChatOpenAI(model="gpt-3.5-turbo", temperature=0.4, max_retries=1)
-    | StrOutputParser()
-)
-
-# --- Batch process documents ---
-print("📄 Generating document summaries...")
-summaries = chain.batch(docs, {"max_concurrency": 5})
-print(f"✅ Generated {len(summaries)} document summaries")
-
-# --- Display results (commented out for cleaner import) ---
-# for doc, summary in zip(docs, summaries):
-#     print(f"\n{'='*80}")
-#     print(f"Chương: {doc.metadata['Chương']} - {doc.metadata['Chương_Name']}")
-#     print(f"Mục: {doc.metadata['Mục']} - {doc.metadata['Mục_Name']}")
-#     print(f"Điều: {doc.metadata['Điều']} - {doc.metadata['Điều_Name']}")
-#     print(f"\n📘 Tóm tắt chi tiết:\n{summary}")
-#     print('='*80)
-
-
-from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_qdrant import QdrantVectorStore
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams
-import uuid
 
-# --- Step 1: Normalize metadata field names ---
-def normalize_metadata(meta: dict):
-    rename_map = {
-        "Chương": "Chuong",
-        "Chương_Name": "Chuong_Name",
-        "Mục": "Muc",
-        "Mục_Name": "Muc_Name",
-        "Điều": "Dieu",
-        "Điều_Name": "Dieu_Name",
-    }
-    new_meta = {}
-    for k, v in meta.items():
-        new_key = rename_map.get(k, k)
-        new_meta[new_key] = v
-    return new_meta
-
-
-# --- Step 2: Prepare summarized documents ---
-vector_docs = []
-for doc, summary in zip(docs, summaries):
-    vector_doc = Document(
-        page_content=summary,  # Dùng summary làm nội dung
-        metadata=normalize_metadata(doc.metadata)  # ✅ dùng metadata đã chuẩn hóa
-    )
-    vector_docs.append(vector_doc)
-
-
-# --- Step 3: Initialize LLMs ---
+# Initialize LLMs
 llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
 llm_creative = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7)
 
-
-# --- Step 4: Initialize embeddings ---
-# embeddings = OpenAIEmbeddings()
-
+# Initialize embeddings
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
-# --- Step 5: Create Qdrant vector store (Cloud or Local) ---
-if USE_QDRANT_CLOUD and QDRANT_CLOUD_URL and QDRANT_API_KEY:
-    # Use Qdrant Cloud for law collection
-    print("📡 Using Qdrant Cloud for law collection...")
-    vectorstore_fix = QdrantVectorStore.from_existing_collection(
-        embedding=embeddings,
-        collection_name="law_collection",
-        url=QDRANT_CLOUD_URL,
-        api_key=QDRANT_API_KEY,
-    )
-    print("✅ Connected to law_collection on Qdrant Cloud")
-else:
-    # Use local/in-memory Qdrant for law collection
-    print("📍 Using local Qdrant for law collection...")
-    vectorstore_fix = QdrantVectorStore.from_documents(
-        documents=vector_docs,
-        embedding=embeddings,
-        collection_name="legal_documents",
-        location=":memory:"  # In-memory mode (no server needed)
-    )
-    print("✅ Qdrant vector store created successfully with", len(vector_docs), "documents.")
+# Connect to Qdrant Cloud for law collection
+print("📡 Using Qdrant Cloud for law collection...")
+vectorstore_fix = QdrantVectorStore.from_existing_collection(
+    embedding=embeddings,
+    collection_name="law_collection",
+    url=QDRANT_CLOUD_URL,
+    api_key=QDRANT_API_KEY,
+)
+print("✅ Connected to law_collection on Qdrant Cloud")
 
 from langchain.chains.query_constructor.ir import Comparator, Operator
 from langchain.retrievers.self_query.qdrant import QdrantTranslator
@@ -1580,6 +861,10 @@ mo_ta_van_ban = """Văn bản pháp luật Việt Nam có cấu trúc phân cấ
   * "chương 3" hoặc "Chương 3" → "Chương III"
   * "chương 10" hoặc "Chương 10" → "Chương X"
 - Viết hoa chữ 'C': "Chương" (KHÔNG phải "chương")
+
+⚠️ JSON OUTPUT FORMAT:
+- MUST use actual Vietnamese characters in the JSON output, NOT Unicode escape sequences
+- DO NOT use \\uXXXX escapes - use the actual characters directly (ụ, ơ, ư, etc.)
 
 Khi tìm kiếm:
 - SỐ ĐIỀU (ví dụ: "Điều 9") → dùng Dieu_Number với eq: eq("Dieu_Number", 9)
@@ -1612,7 +897,8 @@ metadata_fields = [
 ]
 
 # --- Khởi tạo LLM ---
-llm_query = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+# Using gpt-4o-mini for better Unicode handling and structured output
+llm_query = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 # --- Tạo prompt constructor với allowed_operators ---
 prompt_truy_van_phap_luat = get_query_constructor_prompt(
@@ -1672,8 +958,57 @@ parser_phap_luat = StructuredQueryOutputParser.from_components(
     allowed_operators=[Operator.AND, Operator.OR],  # Enable AND and OR
 )
 
+# --- Custom function to fix Unicode escapes ---
+def fix_unicode_in_query_output(llm_output: str):
+    """Fix Unicode escape sequences in LLM output before parsing"""
+    import re
+    import json
+
+    # Only fix Unicode escapes within JSON structures
+    try:
+        # Find JSON object in text (handles multiline)
+        json_match = re.search(r'```json\s*(\{.*?\})\s*```', llm_output, re.DOTALL)
+        if not json_match:
+            # Try without code fence
+            json_match = re.search(r'(\{.*?\})', llm_output, re.DOTALL)
+
+        if json_match:
+            json_text = json_match.group(1)
+
+            # Replace Unicode escapes manually character by character
+            def replace_unicode_escape(match):
+                try:
+                    code = match.group(1)
+                    return chr(int(code, 16))
+                except:
+                    return match.group(0)
+
+            # Pattern to match \uXXXX (4 hex digits)
+            fixed_json = re.sub(r'\\u([0-9a-fA-F]{4})', replace_unicode_escape, json_text)
+
+            # Verify it's valid JSON now
+            try:
+                json.loads(fixed_json)
+                # Replace the JSON in the original text
+                return llm_output.replace(json_text, fixed_json)
+            except:
+                return llm_output
+        else:
+            return llm_output
+
+    except Exception as e:
+        print(f"  ⚠️ Unicode fix error: {e}, using original text")
+        return llm_output
+
+# Create a simple wrapper using RunnableLambda
+from langchain_core.runnables import RunnableLambda
+
+# Wrap the fix function as a Runnable
+unicode_fixer = RunnableLambda(fix_unicode_in_query_output)
+
 # --- Kết hợp prompt và LLM ---
-llm_constructor_phap_luat = prompt_truy_van_phap_luat | llm_query | parser_phap_luat
+# Chain: prompt -> llm -> unicode_fixer -> parser
+llm_constructor_phap_luat = prompt_truy_van_phap_luat | llm_query | unicode_fixer | parser_phap_luat
 
 # --- Tạo SelfQueryRetriever ---
 retriever_phap_luat = SelfQueryRetriever(
@@ -1775,13 +1110,163 @@ fallback_retriever = FallbackLegalRetriever(
 
 print("✅ Fallback retriever created!")
 
-# Test (commented out for module import)
-# query = "Nói rõ các điều về tái chế trong Luật Bảo vệ môi trường ra?"
-# results = fallback_retriever.invoke(query)
-# print(f"\n📊 RESULTS: {len(results)} documents")
-# for i, doc in enumerate(results, 1):
-#     print(f"\n{i}. Điều {doc.metadata.get('Dieu')}: {doc.metadata.get('Dieu_Name')}")
-#     print(f"   Content: {doc.page_content[:100]}...")
+# ========== COUNTING LOGIC FOR "HOW MANY" QUESTIONS ==========
+
+def is_counting_question(query: str) -> bool:
+    """
+    Detect if a query is asking about quantity/count
+    Returns True if the query contains counting keywords
+    """
+    counting_keywords = [
+        "bao nhiêu",
+        "bao nhiều",
+        "có mấy",
+        "tổng số",
+        "tổng cộng",
+        "số lượng",
+        "đếm",
+        "mấy điều",
+        "how many"
+    ]
+
+    query_lower = query.lower()
+    return any(keyword in query_lower for keyword in counting_keywords)
+
+
+def count_articles_with_filter(structured_query, translator, vectorstore) -> dict:
+    """
+    Count unique articles (Dieu_Number) matching the structured query filter
+
+    Args:
+        structured_query: The structured query object with filter
+        translator: QdrantTranslator instance
+        vectorstore: Qdrant vectorstore instance
+
+    Returns:
+        dict with 'count', 'articles' (list of Dieu_Numbers), and 'filter_description'
+    """
+    print(f"\n{'='*80}")
+    print(f"🔢 COUNTING ARTICLES WITH FILTER")
+    print(f"{'='*80}")
+
+    # Translate filter to Qdrant format
+    if not structured_query.filter:
+        print("⚠️  No filter found, cannot count")
+        return {"count": None, "articles": [], "filter_description": "không có bộ lọc"}
+
+    try:
+        result = translator.visit_structured_query(structured_query)
+
+        # Extract filter
+        if isinstance(result, tuple):
+            _, filter_dict = result
+            qdrant_filter = filter_dict.get('filter') if isinstance(filter_dict, dict) else filter_dict
+        elif isinstance(result, dict):
+            qdrant_filter = result.get('filter', result)
+        else:
+            qdrant_filter = result
+
+        print(f"   Using Qdrant filter: {qdrant_filter}")
+
+        # Use scroll to get ALL matching documents (not limited by k)
+        from qdrant_client.models import ScrollResult
+
+        # Get the Qdrant client from vectorstore
+        client = vectorstore.client
+        collection_name = vectorstore.collection_name
+
+        # Scroll through all matching documents
+        all_points = []
+        scroll_result = client.scroll(
+            collection_name=collection_name,
+            scroll_filter=qdrant_filter,
+            limit=100,  # Get 100 at a time
+            with_payload=True,
+            with_vectors=False
+        )
+
+        all_points.extend(scroll_result[0])
+
+        # Continue scrolling if there's more
+        next_page_offset = scroll_result[1]
+        while next_page_offset:
+            scroll_result = client.scroll(
+                collection_name=collection_name,
+                scroll_filter=qdrant_filter,
+                limit=100,
+                offset=next_page_offset,
+                with_payload=True,
+                with_vectors=False
+            )
+            all_points.extend(scroll_result[0])
+            next_page_offset = scroll_result[1]
+
+        print(f"   📊 Found {len(all_points)} total documents matching filter")
+
+        # Extract unique Dieu_Number values
+        dieu_numbers = set()
+        for point in all_points:
+            dieu_num = point.payload.get('metadata', {}).get('Dieu_Number')
+            if dieu_num is not None:
+                dieu_numbers.add(dieu_num)
+
+        sorted_articles = sorted(list(dieu_numbers))
+
+        print(f"   📌 Unique articles (Dieu_Number): {sorted_articles}")
+        print(f"   ✅ Total count: {len(sorted_articles)} điều luật")
+        print(f"{'='*80}\n")
+
+        # Create filter description for natural language response
+        filter_desc = structured_query.query
+
+        return {
+            "count": len(sorted_articles),
+            "articles": sorted_articles,
+            "filter_description": filter_desc,
+            "raw_filter": str(structured_query.filter)
+        }
+
+    except Exception as e:
+        print(f"❌ Error counting articles: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"count": None, "articles": [], "filter_description": "lỗi khi đếm"}
+
+
+def generate_counting_answer(count_result: dict, original_query: str) -> str:
+    """
+    Generate a natural language answer for counting questions
+    """
+    count = count_result.get("count")
+    articles = count_result.get("articles", [])
+    filter_desc = count_result.get("filter_description", "")
+
+    if count is None:
+        return "Xin lỗi, tôi không thể đếm số lượng điều luật dựa trên câu hỏi của bạn."
+
+    if count == 0:
+        return f"Không có điều luật nào trong phạm vi bạn yêu cầu ({filter_desc})."
+
+    # Create answer
+    answer = f"Có **{count} điều luật** trong phạm vi bạn yêu cầu"
+
+    # Add filter context if available
+    if "mục" in original_query.lower() or "chương" in original_query.lower():
+        answer += f" ({filter_desc})"
+
+    answer += "."
+
+    # List the articles if count is reasonable (< 20)
+    if count > 0 and count <= 20:
+        articles_str = ", ".join([f"Điều {a}" for a in articles])
+        answer += f"\n\nCụ thể: {articles_str}."
+    elif count > 20:
+        # Show first 10 and last 5
+        first_10 = ", ".join([f"Điều {a}" for a in articles[:10]])
+        last_5 = ", ".join([f"Điều {a}" for a in articles[-5:]])
+        answer += f"\n\nCụ thể: {first_10}, ... , {last_5}."
+
+    return answer
 
 
 from langchain_core.pydantic_v1 import BaseModel, Field
@@ -2026,6 +1511,49 @@ def retrieve(state):
     question = state["question"]
     original_question = state.get("original_question", question)
 
+    # ✅ CHECK IF THIS IS A COUNTING QUESTION
+    if is_counting_question(question):
+        print("  🔢 Detected COUNTING question")
+
+        try:
+            # Parse the query to extract filters
+            structured_query = llm_constructor_phap_luat.invoke({"query": question})
+
+            # Count articles with the filter
+            translator = QdrantTranslator(metadata_key="metadata")
+            count_result = count_articles_with_filter(
+                structured_query,
+                translator,
+                vectorstore_fix
+            )
+
+            # Generate counting answer
+            counting_answer = generate_counting_answer(count_result, question)
+
+            # Store the counting answer as a special document
+            from langchain_core.documents import Document
+            counting_doc = Document(
+                page_content=counting_answer,
+                metadata={"type": "counting_result", "count": count_result.get("count")}
+            )
+
+            print(f"  ✅ Counting complete: {count_result.get('count')} articles")
+
+            return {
+                **state,
+                "documents": [counting_doc],  # Return counting result as document
+                "original_question": original_question,
+                "is_counting_query": True  # Flag to handle differently in generation
+            }
+
+        except Exception as e:
+            print(f"  ⚠️ Counting failed: {e}")
+            import traceback
+            traceback.print_exc()
+            print("  🔄 Falling back to normal retrieval...")
+            # Fall through to normal retrieval
+
+    # ✅ NORMAL RETRIEVAL FOR NON-COUNTING QUESTIONS
     try:
         # documents = retriever_phap_luat.invoke(question)
         documents = fallback_retriever.invoke(question)
@@ -2045,7 +1573,8 @@ def retrieve(state):
     return {
         **state,
         "documents": documents,
-        "original_question": original_question
+        "original_question": original_question,
+        "is_counting_query": False
     }
 
 ### Generate
@@ -2068,7 +1597,7 @@ QUY TẮC TRẢ LỜI:
 - Luôn trích dẫn nguồn (Điều, Chương, Mục) khi có thể
 - KHÔNG sử dụng cụm từ "Tài liệu 1", "Tài liệu 2" - CHỈ dùng "Điều X", "Chương Y", "Mục Z"
 - Sử dụng ngôn ngữ pháp lý chính xác nhưng dễ hiểu
-- Trả lời đầy đủ thông tin, không được bỏ sót thông tin quan trọng
+- Trả lời ngắn gọn, súc tích nhưng đầy đủ thông tin
 
 ĐỊNH DẠNG TRẢ LỜI MẪU:
 "Theo Điều X (Tên điều), [nội dung chính]. Cụ thể, [giải thích chi tiết]..."
@@ -2173,11 +1702,25 @@ def generate(state):
     question = state["question"]
     documents = state["documents"]
     retries = state.get("retries", 0)
+    is_counting_query = state.get("is_counting_query", False)
 
+    # ✅ HANDLE COUNTING QUERIES - Return the counting answer directly
+    if is_counting_query and documents:
+        print("   🔢 Counting query detected - returning direct answer")
+        generation = documents[0].page_content  # The counting answer is stored in the document
+        print(f"   ✅ Answer: {generation[:200]}...")
+
+        return {
+            "documents": documents,
+            "question": question,
+            "generation": generation,
+            "retries": retries
+        }
+
+    # ✅ NORMAL GENERATION FOR NON-COUNTING QUERIES
     if not documents:
         print("   ⚠️ No documents available")
-
-
+        generation = "Xin lỗi, tôi không tìm thấy thông tin liên quan trong cơ sở dữ liệu."
     else:
         # Format documents with metadata
         context = format_docs(documents)
@@ -2617,139 +2160,8 @@ class GraphState(TypedDict):
     hallucination_detected: bool 
     web_urls: str
 
-# ========== BUILD WORKFLOW ==========
-
-workflow = StateGraph(GraphState)
-
-# Add initial routing node (no transformation - just routes)
-def initial_route_node(state):
-    """Initial routing node - passes question through without transformation"""
-    print("---INITIAL ROUTING NODE---")
-    question = state["question"]
-    chat_history = get_full_chat_history()
-
-    # Save original question and chat history at the very beginning
-    if "original_question" not in state or not state.get("original_question"):
-        print(f"  💾 Saving original question: {question}")
-        state["original_question"] = question
-
-    if "original_chat_history" not in state or not state.get("original_chat_history"):
-        print(f"  💾 Saving chat history snapshot ({len(chat_history)} chars)")
-        state["original_chat_history"] = chat_history
-
-    # Just return state without transformation
-    return {
-        **state,
-        "question": question,
-        "chat_history": chat_history
-    }
-
-# Add nodes
-workflow.add_node("initial_route", initial_route_node)
-workflow.add_node("retrieve_faq", retrieve_faq_node)
-
-workflow.add_node("generate_faq", generate_faq_node)
-workflow.add_node("retrieve", retrieve)
-workflow.add_node("generate", generate)
-
-workflow.add_node("transform_query1", transform_query)
-workflow.add_node("transform_query2", transform_query)
-workflow.add_node("transform_query3", transform_query)
-
-workflow.add_node("grade_documents", grade_documents)
-workflow.add_node("grade_generation", grade_generation_v_documents_and_question)
-
-workflow.add_node("chitchat1", chitchat)
-workflow.add_node("chitchat2", chitchat)
-workflow.add_node("web_search1", web_search) # web search
-workflow.add_node("generate_web1", generate_web) # generatae
-
-workflow.add_node("web_search2", web_search) # web search
-workflow.add_node("generate_web2", generate_web) # generatae
-
-workflow.add_node("new_round_router", new_round_router)
-
-# Set entry point with routing BEFORE transformation
-workflow.set_entry_point("initial_route")
-workflow.add_conditional_edges(
-    "initial_route",
-    route_question_faq,
-    {
-        "vectorstore_faq": "transform_query1",  # Transform only for FAQ path
-        "chitchat": "chitchat1",  # No transformation for chitchat
-    },
-)
-
-# After transforming FAQ queries, retrieve
-workflow.add_edge("transform_query1", "retrieve_faq")
-
-# Add edges
-workflow.add_edge("chitchat1", END)
-
-# Conditional edges from grade_faq_documents
-workflow.add_conditional_edges(
-    "retrieve_faq",
-    decide_after_retrieve_faq,
-    {
-        "generate_faq": "generate_faq",
-        "new_round_router": "new_round_router",
-    },
-)
-
-# Transform query loops back to retrieve
-workflow.add_edge("generate_faq", END)
-
-workflow.add_edge("new_round_router", "transform_query2")
-
-workflow.add_conditional_edges(
-    "transform_query2",
-    route_question_law,
-    {
-        "vectorstore": "retrieve",
-        "chitchat": "chitchat2",
-    },
-)
-
-workflow.add_edge("chitchat2", END)
-workflow.add_edge("retrieve", "grade_documents")
-workflow.add_conditional_edges(
-    "grade_documents",
-    decide_to_generate,
-    {
-        "transform_query": "transform_query3",
-        "generate": "generate",
-        "web_search":"web_search1"
-    },
-)
-workflow.add_edge("transform_query3", "retrieve")
-
-
-
-workflow.add_edge("web_search1","generate_web1")
-
-workflow.add_edge("generate_web1",END)
-
-workflow.add_edge("generate", "grade_generation")
-
-workflow.add_conditional_edges(
-    "grade_generation",
-    decide_after_grade_generation,
-    {
-        "useful": END,              # Good answer
-        "not useful": "transform_query3",   # Regenerate with same docs
-        "not supported": "generate", # Regenerate (hallucination)
-        "web_search": "web_search2"  # Max retries, go to web search
-    }
-)
-workflow.add_edge("web_search2","generate_web2")
-workflow.add_edge("generate_web2",END)
-
-
-
-# Compile the graph
-app = workflow.compile()
-
-print("✅ Workflow compiled successfully!")
+# ========== STATEGRAPH WORKFLOW REMOVED ==========
+# Old StateGraph workflow removed (not used - replaced by optimized_chatbot_pipeline)
 
 
 
@@ -2801,86 +2213,6 @@ def clear_memory():
     print("✨ Đã xóa toàn bộ bộ nhớ hội thoại thành công!")
 
 
-# === Test 11: Clear memory ===
-print("\n📝 TEST 11: CLEAR MEMORY")
-clear_memory()
-
-def test_graph(question: str):
-    """Test graph with proper initialization"""
-    print("\n" + "#"*80)
-    print("🤖 TESTING GRAPH")
-    print("#"*80)
-    print(f"Question: {question}")
-
-    real_chat_history = get_full_chat_history(max_exchanges=5)
-
-    initial_state = {
-        "question": question,
-        "generation": "",
-        "documents": [],
-        "original_question": question,
-        "chat_history": real_chat_history,
-        "retries": 0,
-        "generation_retries": 0,  # ✅ CRITICAL: Initialize to 0, not None
-        "original_chat_history": "",
-        "web_urls": "",
-        "hallucination_detected": False,
-        "answer_quality": "",
-        "grade_result": ""
-    }
-
-    final_state = app.invoke(initial_state)
-
-    print("\n" + "#"*80)
-    print("✅ COMPLETE")
-    print(f"Answer: {final_state.get('generation', '')}")
-    print(f"Query retries used: {final_state.get('retries', 0)}")
-    print(f"Generation retries used: {final_state.get('generation_retries', 0)}")
-    print("#"*80 + "\n")
-
-    return final_state
-
-# ========== RUN TESTS (COMMENTED OUT FOR MODULE IMPORT) ==========
-# Uncomment below to run standalone tests
-
-# if __name__ == "__main__":
-#     print("\n" + "="*80)
-#     print("🧪 TESTING WITH REAL MEMORY")
-#     print("="*80)
-#
-#     test_cases = [
-#         "bạn làm được gì?",
-#         "bạn biết được bao nhiêu điều luật",
-#         "kể về điều 1 và 2",
-#         "nếu bây giờ tôi muốn làm 2 điều đó, tôi cần làm những gì ở từng điều luật?",
-#         "hướng dẫn tương tự cho điều 4",
-#         "cách nấu mì xào ngon?",
-#     ]
-#
-#     for question in test_cases:
-#         result = test_graph(question)
-#
-#         try:
-#             conversation_memory.save_context(
-#                 {"input": question},
-#                 {"generation": result.get('generation', 'No response')}
-#             )
-#             print(f"💾 Saved to memory: Q='{question[:30]}...' A='{result.get('generation', '')[:30]}...'\n")
-#         except Exception as e:
-#             print(f"⚠️  Could not save to memory: {e}\n")
-#
-#     print("="*80)
-#     print("✅ All tests complete!")
-#     print("="*80)
-#
-#     print("\n" + "="*80)
-#     print("📚 FINAL MEMORY STATE")
-#     print("="*80)
-#     final_history = get_full_chat_history(max_exchanges=10)
-#     print(f"Total history: {len(final_history)} chars\n")
-#     print(final_history)
-#     print("="*80)
-
 print("✅ EPR Chatbot Core Module Loaded Successfully!")
 
 
@@ -2915,12 +2247,58 @@ async def retrieve_faq_async(query: str, score_threshold: float = 0.6):
 
 
 async def retrieve_legal_async(question: str):
-    """Async version of legal document retrieval"""
+    """Async version of legal document retrieval with counting support"""
     print("  📚 [ASYNC] Retrieving legal docs...")
 
     # Run synchronous retrieval in thread pool
     loop = asyncio.get_event_loop()
 
+    # ✅ CHECK IF THIS IS A COUNTING QUESTION
+    if is_counting_question(question):
+        print("  🔢 [ASYNC] Detected COUNTING question")
+
+        def _count_sync():
+            try:
+                # Parse the query to extract filters
+                structured_query = llm_constructor_phap_luat.invoke({"query": question})
+
+                # Count articles with the filter
+                translator = QdrantTranslator(metadata_key="metadata")
+                count_result = count_articles_with_filter(
+                    structured_query,
+                    translator,
+                    vectorstore_fix
+                )
+
+                # Generate counting answer
+                counting_answer = generate_counting_answer(count_result, question)
+
+                # Store the counting answer as a special document
+                from langchain_core.documents import Document
+                counting_doc = Document(
+                    page_content=counting_answer,
+                    metadata={"type": "counting_result", "count": count_result.get("count")}
+                )
+
+                return [counting_doc]
+
+            except Exception as e:
+                print(f"  ⚠️ [ASYNC] Counting failed: {e}")
+                import traceback
+                traceback.print_exc()
+                # Return empty list to trigger fallback
+                return []
+
+        documents = await loop.run_in_executor(None, _count_sync)
+
+        if documents:
+            print(f"  ✅ [ASYNC] Counting done: {documents[0].metadata.get('count')} articles")
+            return documents
+        else:
+            print(f"  ⚠️ [ASYNC] Counting failed, falling back to normal search")
+            # Fall through to normal retrieval
+
+    # ✅ NORMAL RETRIEVAL FOR NON-COUNTING QUESTIONS
     try:
         documents = await loop.run_in_executor(
             None,
@@ -3007,7 +2385,17 @@ def create_streaming_llm():
 streaming_llm = create_streaming_llm()
 
 
-async def generate_answer_streaming(query: str, documents: list, source_type: str = "faq") -> AsyncIterator[str]:
+# ========== STREAMING ANSWER GENERATION ==========
+
+async def generate_answer_streaming(
+    query: str,
+    documents: list,
+    source_type: str = "faq",
+    response_style: str = "detailed",  # "detailed", "concise", "comprehensive"
+    include_examples: bool = True,
+    include_references: bool = True,
+    chat_history: str = ""
+) -> AsyncIterator[str]:
     """
     Generate answer with streaming for real-time display
 
@@ -3015,89 +2403,136 @@ async def generate_answer_streaming(query: str, documents: list, source_type: st
         query: User question
         documents: Retrieved documents
         source_type: "faq" or "legal"
+        response_style: Level of detail in response
+        include_examples: Whether to include practical examples
+        include_references: Whether to include legal references
+        chat_history: Previous conversation context
 
     Yields:
         str: Chunks of the generated response
     """
     if not documents:
-        yield "Xin lỗi, tôi không tìm thấy thông tin phù hợp. Bạn có thể hỏi chi tiết hơn không?"
+        yield """Xin lỗi, tôi không tìm thấy thông tin phù hợp với câu hỏi của bạn trong cơ sở dữ liệu hiện tại.
+
+**Gợi ý để tôi có thể hỗ trợ bạn tốt hơn:**
+- Hãy thử diễn đạt câu hỏi theo cách khác
+- Cung cấp thêm chi tiết về vấn đề bạn quan tâm
+- Cho biết bạn thuộc loại hình doanh nghiệp nào (sản xuất, nhập khẩu, phân phối...)
+
+Bạn có thể đặt câu hỏi lại được không?"""
         return
 
     # GPT-3.5-turbo context limit
-    MAX_CONTEXT_TOKENS = 15000  # Leave buffer for response
+    MAX_CONTEXT_TOKENS = 15000
 
-    # Create appropriate prompt based on source
     if source_type == "faq":
-        doc = documents[0]
-        faq_question = doc.metadata.get("Câu_hỏi", "")
-        faq_answer = doc.page_content
+        async for chunk in _generate_faq_answer(
+            query, documents, response_style, include_examples,
+            chat_history=chat_history
+        ):
+            yield chunk
+    else:
+        async for chunk in _generate_legal_answer(
+            query, documents, MAX_CONTEXT_TOKENS,
+            response_style, include_examples, include_references,
+            chat_history=chat_history
+        ):
+            yield chunk
 
-        # Truncate FAQ answer if too long
-        faq_answer = truncate_text(faq_answer, max_tokens=2000)
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """Bạn là trợ lý AI chuyên về luật EPR Việt Nam.
-Trả lời dựa trên FAQ, giữ thông tin chính xác, ngắn gọn và thân thiện."""),
-            ("user", """Câu hỏi FAQ: {faq_question}
-Câu trả lời FAQ: {faq_answer}
+async def _generate_faq_answer(
+    query: str,
+    documents: list,
+    response_style: str,
+    include_examples: bool,
+    chat_history: str = ""
+) -> AsyncIterator[str]:
+    """Generate detailed FAQ-based answer with conversational AI prompts"""
 
-Câu hỏi người dùng: {user_question}
+    doc = documents[0]
+    faq_question = doc.metadata.get("Câu_hỏi", "")
+    faq_answer = doc.page_content
 
-Trả lời:""")
+    # Get additional related FAQs if available
+    related_faqs = ""
+    if len(documents) > 1:
+        related_faqs = "\n".join([
+            f"- {d.metadata.get('Câu_hỏi', '')}: {truncate_text(d.page_content, 200)}"
+            for d in documents[1:4]
         ])
 
-        chain = prompt | streaming_llm
+    # Truncate FAQ answer if too long
+    faq_answer = truncate_text(faq_answer, max_tokens=2500, model="gpt-3.5-turbo")
 
-        async for chunk in chain.astream({
-            "faq_question": faq_question,
-            "faq_answer": faq_answer,
-            "user_question": query
-        }):
-            if hasattr(chunk, 'content'):
-                yield chunk.content
+    # Use improved prompts with chat history
+    prompts = format_faq_prompt(
+        faq_question=faq_question,
+        faq_answer=faq_answer,
+        query=query,
+        chat_history=chat_history,
+        related_faqs=related_faqs
+    )
 
-    else:  # legal documents
-        # Limit documents to prevent context overflow
-        # Max 4 documents, each with max 1000 tokens
-        context = format_docs(documents, max_docs=4, max_tokens_per_doc=1000)
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", prompts["system"]),
+        ("user", prompts["user"])
+    ])
 
-        # Verify total context size
+    chain = prompt | streaming_llm
+
+    async for chunk in chain.astream({}):
+        if hasattr(chunk, 'content'):
+            yield chunk.content
+
+
+async def _generate_legal_answer(
+    query: str,
+    documents: list,
+    max_context_tokens: int,
+    response_style: str,
+    include_examples: bool,
+    include_references: bool,
+    chat_history: str = ""
+) -> AsyncIterator[str]:
+    """Generate comprehensive legal document-based answer"""
+
+    # Limit documents to prevent context overflow
+    context = format_docs(documents, max_docs=5, max_tokens_per_doc=1200)
+
+    # Verify total context size
+    context_tokens = count_tokens(context)
+    query_tokens = count_tokens(query)
+    system_prompt_tokens = 500  # Account for detailed system prompt
+
+    total_input_tokens = context_tokens + query_tokens + system_prompt_tokens
+
+    print(f"   📊 Context size: {context_tokens} tokens")
+    print(f"   📊 Query size: {query_tokens} tokens")
+    print(f"   📊 Total input: {total_input_tokens} tokens")
+
+    if total_input_tokens > max_context_tokens:
+        print(f"   ⚠️ Context too large ({total_input_tokens} tokens), reducing...")
+        context = format_docs(documents, max_docs=3, max_tokens_per_doc=800)
         context_tokens = count_tokens(context)
-        query_tokens = count_tokens(query)
-        system_prompt_tokens = 100  # Rough estimate
+        print(f"   ✅ Reduced to {context_tokens} tokens")
 
-        total_input_tokens = context_tokens + query_tokens + system_prompt_tokens
+    # Use improved prompts with chat history
+    prompts = format_legal_prompt(
+        context=context,
+        query=query,
+        chat_history=chat_history
+    )
 
-        print(f"   📊 Context size: {context_tokens} tokens")
-        print(f"   📊 Query size: {query_tokens} tokens")
-        print(f"   📊 Total input: {total_input_tokens} tokens")
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", prompts["system"]),
+        ("user", prompts["user"])
+    ])
 
-        if total_input_tokens > MAX_CONTEXT_TOKENS:
-            print(f"   ⚠️ Context too large ({total_input_tokens} tokens), further reducing...")
-            # Further reduce if still too large
-            context = format_docs(documents, max_docs=3, max_tokens_per_doc=600)
-            context_tokens = count_tokens(context)
-            print(f"   ✅ Reduced to {context_tokens} tokens")
+    chain = prompt | streaming_llm
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """Bạn là trợ lý AI chuyên về pháp luật EPR Việt Nam.
-Trả lời dựa HOÀN TOÀN trên tài liệu, trích dẫn Điều/Chương cụ thể."""),
-            ("user", """Tài liệu pháp luật:
-{context}
-
-Câu hỏi: {question}
-
-Trả lời:""")
-        ])
-
-        chain = prompt | streaming_llm
-
-        async for chunk in chain.astream({
-            "context": context,
-            "question": query
-        }):
-            if hasattr(chunk, 'content'):
-                yield chunk.content
+    async for chunk in chain.astream({}):
+        if hasattr(chunk, 'content'):
+            yield chunk.content
 
 
 # ========== OPTIMIZED CHATBOT PIPELINE ==========
@@ -3288,7 +2723,12 @@ async def optimized_chatbot_pipeline(
     # Step 4: Stream the response
     full_response = ""
 
-    async for chunk in generate_answer_streaming(query, documents_to_use, source_type):
+    async for chunk in generate_answer_streaming(
+        query,
+        documents_to_use,
+        source_type,
+        chat_history=chat_history
+    ):
         full_response += chunk
         yield {
             'type': 'response_chunk',
@@ -3308,16 +2748,6 @@ async def optimized_chatbot_pipeline(
     print("🔹"*40)
     print("✅ OPTIMIZED PIPELINE COMPLETE")
     print("🔹"*40 + "\n")
-
-
-# ========== HELPER FUNCTION FOR STREAMLIT ==========
-
-def run_optimized_chatbot(query: str, chat_history: str = ""):
-    """
-    Synchronous wrapper for Streamlit
-    Returns an async generator that can be consumed by Streamlit
-    """
-    return optimized_chatbot_pipeline(query, chat_history)
 
 
 print("✅ Performance optimizations loaded!")
