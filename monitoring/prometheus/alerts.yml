@@ -1,0 +1,180 @@
+# ============================================
+# PROMETHEUS ALERTING RULES
+# ============================================
+# Define alerts for critical conditions
+# ============================================
+
+groups:
+  # ============================================
+  # INFRASTRUCTURE ALERTS
+  # ============================================
+  - name: infrastructure
+    interval: 30s
+    rules:
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% on {{ $labels.instance }} (current: {{ $value }}%)"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 85% on {{ $labels.instance }} (current: {{ $value }}%)"
+
+      # Disk space low
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk space running low"
+          description: "Disk space is below 15% on {{ $labels.instance }} (current: {{ $value }}%)"
+
+      # Node down
+      - alert: NodeDown
+        expr: up{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node is down"
+          description: "Node exporter on {{ $labels.instance }} is down"
+
+  # ============================================
+  # DATABASE ALERTS
+  # ============================================
+  - name: database
+    interval: 30s
+    rules:
+      # PostgreSQL down
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database is not responding"
+
+      # Too many connections
+      - alert: PostgreSQLTooManyConnections
+        expr: sum by(instance) (pg_stat_activity_count) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL has too many connections"
+          description: "PostgreSQL has {{ $value }} active connections (threshold: 80)"
+
+      # Redis down
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache server is not responding"
+
+      # Redis memory high
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis memory usage is above 90% (current: {{ $value }}%)"
+
+  # ============================================
+  # APPLICATION ALERTS
+  # ============================================
+  - name: application
+    interval: 30s
+    rules:
+      # Service down
+      - alert: ServiceDown
+        expr: up{job=~"epr-backend.*|chatbot.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} ({{ $labels.environment }}) is not responding"
+
+      # High error rate (if metrics available)
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is above 5% on {{ $labels.service }} ({{ $labels.environment }})"
+
+      # Slow response time (if metrics available)
+      - alert: SlowResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow response time detected"
+          description: "95th percentile response time is above 1s on {{ $labels.service }}"
+
+  # ============================================
+  # CONTAINER ALERTS
+  # ============================================
+  - name: containers
+    interval: 30s
+    rules:
+      # Container down
+      - alert: ContainerDown
+        expr: absent(container_last_seen{name=~"epr-.*"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container is down"
+          description: "Container {{ $labels.name }} is not running"
+
+      # Container high CPU
+      - alert: ContainerHighCPU
+        expr: rate(container_cpu_usage_seconds_total{name=~"epr-.*"}[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container CPU usage is high"
+          description: "Container {{ $labels.name }} CPU usage is above 80%"
+
+      # Container high memory
+      - alert: ContainerHighMemory
+        expr: container_memory_usage_bytes{name=~"epr-.*"} / container_spec_memory_limit_bytes{name=~"epr-.*"} * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container memory usage is high"
+          description: "Container {{ $labels.name }} memory usage is above 85%"
+
+      # Container restarting
+      - alert: ContainerRestarting
+        expr: rate(container_last_seen{name=~"epr-.*"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container is restarting frequently"
+          description: "Container {{ $labels.name }} has restarted {{ $value }} times in the last 5 minutes"

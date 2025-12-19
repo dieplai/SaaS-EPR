@@ -1,0 +1,103 @@
+# ============================================
+# ALERTMANAGER CONFIGURATION
+# ============================================
+# Route alerts to Slack, Email, PagerDuty
+# ============================================
+
+global:
+  resolve_timeout: 5m
+  # Slack webhook URL (configure in .env)
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+
+# Templates for alert messages
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Alert routing
+route:
+  # Group alerts by these labels
+  group_by: ['alertname', 'cluster', 'service']
+
+  # Wait before sending initial notification
+  group_wait: 10s
+
+  # Wait before sending updates
+  group_interval: 10s
+
+  # Wait before repeating notifications
+  repeat_interval: 12h
+
+  # Default receiver
+  receiver: 'slack-notifications'
+
+  # Sub-routes for specific alert types
+  routes:
+    # Critical alerts go to PagerDuty + Slack
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      continue: true
+
+    # Warning alerts go to Slack only
+    - match:
+        severity: warning
+      receiver: 'slack-notifications'
+
+# Alert receivers
+receivers:
+  # Slack for all notifications
+  - name: 'slack-notifications'
+    slack_configs:
+      - channel: '#epr-alerts'
+        username: 'AlertManager'
+        icon_emoji: ':warning:'
+        title: '{{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Severity:* {{ .Labels.severity }}
+          *Environment:* {{ .Labels.environment }}
+          {{ end }}
+        send_resolved: true
+
+  # Critical alerts (Slack + Email)
+  - name: 'critical-alerts'
+    slack_configs:
+      - channel: '#epr-critical'
+        username: 'AlertManager'
+        icon_emoji: ':rotating_light:'
+        title: ':rotating_light: CRITICAL ALERT'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Environment:* {{ .Labels.environment }}
+          {{ end }}
+        send_resolved: true
+
+    # Email configuration (configure SMTP in global)
+    email_configs:
+      - to: '${ALERT_EMAIL:-ops@example.com}'
+        from: 'alertmanager@epr.dieplai.io.vn'
+        smarthost: '${SMTP_HOST:-smtp.gmail.com}:587'
+        auth_username: '${SMTP_USER}'
+        auth_password: '${SMTP_PASSWORD}'
+        headers:
+          Subject: '[EPR] Critical Alert: {{ .GroupLabels.alertname }}'
+
+# Inhibition rules (suppress alerts based on other alerts)
+inhibit_rules:
+  # If node is down, suppress all other alerts from that node
+  - source_match:
+      alertname: 'NodeDown'
+    target_match_re:
+      instance: '.*'
+    equal: ['instance']
+
+  # If service is down, suppress high error rate alerts
+  - source_match:
+      alertname: 'ServiceDown'
+    target_match:
+      alertname: 'HighErrorRate'
+    equal: ['service', 'environment']
