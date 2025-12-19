@@ -15,7 +15,9 @@ build
 # Misc
 .DS_Store
 *.pem
+.env.local
 .env*.local
+.env
 .vercel
 
 # IDE
