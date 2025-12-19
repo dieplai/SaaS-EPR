@@ -96,11 +96,11 @@ fi
 echo -e "${YELLOW}[6/8] Deploying services${NC}"
 if [ "$ENV" = "production" ]; then
   # Production: Use additional production compose file for different ports
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.production.yml --env-file ".env.$ENV" up -d --remove-orphans
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.production.yml --env-file ".env.$ENV" up -d --force-recreate --remove-orphans
   BACKEND_CONTAINER="epr-backend-prod"
 else
   # Staging: Standard deployment
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file ".env.$ENV" up -d --remove-orphans
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file ".env.$ENV" up -d --force-recreate --remove-orphans
   BACKEND_CONTAINER="epr-backend"
 fi
 echo -e "${GREEN}OK: Services deployed${NC}"
