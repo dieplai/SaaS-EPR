@@ -1,0 +1,33 @@
+# ============================================
+# EPR SaaS - STAGING ENVIRONMENT OVERRIDE
+# ============================================
+# Staging-specific configuration
+# Runs alongside production with different ports
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.staging.yml up
+# ============================================
+
+services:
+  # ============================================
+  # BACKEND - Staging container name & port
+  # ============================================
+  epr-backend:
+    container_name: epr-backend
+    ports:
+      - "8001:8001"  # Staging uses default port 8001
+
+  # ============================================
+  # CHATBOT - Staging container name & port
+  # ============================================
+  ai-chatbot-api:
+    container_name: epr-ai-chatbot-api
+    ports:
+      - "8000:8000"  # Staging uses default port 8000
+
+  # ============================================
+  # FRONTEND - Staging container name & port
+  # ============================================
+  web-frontend:
+    container_name: epr-web-frontend
+    ports:
+      - "3000:3000"  # Staging uses default port 3000
+    # Note: NEXT_PUBLIC_ vars are baked into image at build time, not runtime
