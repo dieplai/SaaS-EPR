@@ -15,8 +15,7 @@ services:
       context: ./backend/services/epr-backend
       dockerfile: Dockerfile
     container_name: epr-backend
-    ports:
-      - "${EPR_BACKEND_PORT:-8001}:8001"
+    # Ports defined in environment-specific overrides (staging.yml, production.yml)
     environment:
       - PORT=8001
       - NODE_ENV=${NODE_ENV:-development}
@@ -38,8 +37,7 @@ services:
       context: ./backend/services/epr-chatbot-service
       dockerfile: Dockerfile
     container_name: epr-ai-chatbot-api
-    ports:
-      - "${AI_CHATBOT_PORT:-8000}:8000"
+    # Ports defined in environment-specific overrides (staging.yml, production.yml)
     environment:
       - ENVIRONMENT=${NODE_ENV:-development}
       - DEBUG=${DEBUG:-true}
@@ -76,8 +74,7 @@ services:
       context: ./web
       dockerfile: Dockerfile
     container_name: epr-web-frontend
-    ports:
-      - "3001:3000"
+    # Ports defined in environment-specific overrides (staging.yml, production.yml)
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=http://epr-backend:8001/api/v1
