@@ -26,7 +26,6 @@ services:
   web-frontend:
     image: ghcr.io/dieplai/saas-epr-web:${DEPLOY_ENV:-staging}
     build: null
-    ports:
-      - "3000:3000"  # Expose to host for NGINX native to proxy
+    # Ports defined in environment-specific overrides (staging.yml, production.yml)
     environment: []  # Clear environment from base - NEXT_PUBLIC_ vars are baked at build time
     # Note: NEXT_PUBLIC_ vars are baked into image at build time, not runtime
