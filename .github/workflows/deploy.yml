@@ -64,7 +64,33 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # ============================================
-      # 4. Build & Push Docker Images
+      # 4. Set Environment-Specific URLs
+      # ============================================
+      - name: Set environment URLs
+        id: urls
+        run: |
+          if [ "${{ steps.env.outputs.name }}" == "production" ]; then
+            echo "api_url=https://epr.dieplai.io.vn/api" >> $GITHUB_OUTPUT
+            echo "chatbot_url=https://epr.dieplai.io.vn" >> $GITHUB_OUTPUT
+            echo "app_url=https://epr.dieplai.io.vn" >> $GITHUB_OUTPUT
+          else
+            echo "api_url=https://staging.epr.dieplai.io.vn/api" >> $GITHUB_OUTPUT
+            echo "chatbot_url=https://staging.epr.dieplai.io.vn" >> $GITHUB_OUTPUT
+            echo "app_url=https://staging.epr.dieplai.io.vn" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Verify build configuration
+        run: |
+          echo "========================================="
+          echo "🔧 Build Configuration for ${{ steps.env.outputs.name }}"
+          echo "========================================="
+          echo "API URL: ${{ steps.urls.outputs.api_url }}"
+          echo "Chatbot URL: ${{ steps.urls.outputs.chatbot_url }}"
+          echo "App URL: ${{ steps.urls.outputs.app_url }}"
+          echo "========================================="
+
+      # ============================================
+      # 5. Build & Push Docker Images
       # ============================================
       - name: Build and push Backend
         uses: docker/build-push-action@v5
@@ -89,17 +115,17 @@ jobs:
         with:
           context: ./web
           push: true
-          no-cache: true  # Force rebuild to ensure .dockerignore changes take effect
+          no-cache: true
           build-args: |
-            NEXT_PUBLIC_BROWSER_API_URL=${{ steps.env.outputs.name == 'production' && 'https://epr.dieplai.io.vn/api' || 'https://staging.epr.dieplai.io.vn/api' }}
-            NEXT_PUBLIC_BROWSER_CHATBOT_URL=${{ steps.env.outputs.name == 'production' && 'https://epr.dieplai.io.vn' || 'https://staging.epr.dieplai.io.vn' }}
-            NEXT_PUBLIC_APP_URL=${{ steps.env.outputs.name == 'production' && 'https://epr.dieplai.io.vn' || 'https://staging.epr.dieplai.io.vn' }}
+            NEXT_PUBLIC_BROWSER_API_URL=${{ steps.urls.outputs.api_url }}
+            NEXT_PUBLIC_BROWSER_CHATBOT_URL=${{ steps.urls.outputs.chatbot_url }}
+            NEXT_PUBLIC_APP_URL=${{ steps.urls.outputs.app_url }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-web:${{ steps.env.outputs.name }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-web:${{ steps.env.outputs.name }}-${{ github.sha }}
 
       # ============================================
-      # 5. Deploy to VPS
+      # 6. Deploy to VPS
       # ============================================
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
@@ -149,7 +175,7 @@ jobs:
             ./infrastructure/scripts/deploy.sh $DEPLOY_ENV
 
       # ============================================
-      # 6. Deployment Summary
+      # 7. Deployment Summary
       # ============================================
       - name: Deployment summary
         if: always()
