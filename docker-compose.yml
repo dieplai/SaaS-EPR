@@ -160,15 +160,15 @@ services:
 networks:
   epr-network:
     driver: bridge
-    name: epr-network
+    name: epr-network  # Fixed name - shared between staging and production
 
 # ============================================
 # VOLUMES
 # ============================================
 volumes:
   postgres_data:
-    name: epr_postgres_data
+    name: epr_postgres_data  # Fixed name - shared between staging and production
   redis_data:
-    name: epr_redis_data
+    name: epr_redis_data  # Fixed name - shared between staging and production
   chatbot_data:
-    name: epr_chatbot_data
+    name: epr_chatbot_data  # Fixed name - shared between staging and production

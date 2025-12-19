@@ -8,6 +8,15 @@
 
 services:
   # ============================================
+  # INFRASTRUCTURE - Shared with production
+  # ============================================
+  postgres:
+    profiles: [infrastructure]  # Don't recreate in staging (use existing from production)
+
+  redis:
+    profiles: [infrastructure]  # Don't recreate in staging (use existing from production)
+
+  # ============================================
   # BACKEND - Staging container name & port
   # ============================================
   epr-backend:
