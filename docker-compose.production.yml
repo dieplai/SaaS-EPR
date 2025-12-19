@@ -23,11 +23,6 @@ services:
     ports:
       - "8100:8000"  # Host:Container
 
-  ai-chatbot-ui:
-    container_name: epr-ai-chatbot-ui-prod
-    ports:
-      - "8601:8501"  # Host:Container
-
   # ============================================
   # FRONTEND - Production ports
   # ============================================
