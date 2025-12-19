@@ -1,0 +1,71 @@
+# ============================================
+# EPR SaaS - INFRASTRUCTURE ONLY
+# ============================================
+# This file defines only shared infrastructure services
+# Run ONCE to create postgres/redis containers
+# Usage: docker compose -f docker-compose.infrastructure.yml up -d
+# ============================================
+
+services:
+  # ============================================
+  # DATABASE
+  # ============================================
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: epr-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-epr_saas}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/init-scripts:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - epr-network
+    restart: unless-stopped
+
+  # ============================================
+  # CACHE & SESSION
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: epr-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - epr-network
+    restart: unless-stopped
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  epr-network:
+    driver: bridge
+    name: epr-network
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  postgres_data:
+    name: epr_postgres_data
+  redis_data:
+    name: epr_redis_data
+  chatbot_data:
+    name: epr_chatbot_data

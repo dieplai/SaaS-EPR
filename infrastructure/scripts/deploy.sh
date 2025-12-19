@@ -104,8 +104,19 @@ fi
 
 echo -e "${GREEN}OK: Images pulled successfully${NC}"
 
+# Ensure infrastructure (postgres/redis) exists
+echo -e "${YELLOW}[5/9] Ensuring infrastructure services${NC}"
+if ! docker ps --format '{{.Names}}' | grep -q "^epr-postgres$"; then
+  echo -e "${YELLOW}Infrastructure not found, deploying postgres and redis...${NC}"
+  docker compose -f docker-compose.infrastructure.yml up -d
+  echo -e "${GREEN}OK: Infrastructure services deployed${NC}"
+  sleep 5  # Wait for services to start
+else
+  echo -e "${GREEN}OK: Infrastructure services already running${NC}"
+fi
+
 # Database setup BEFORE deploying services (critical for password sync)
-echo -e "${YELLOW}[5/8] Setting up databases${NC}"
+echo -e "${YELLOW}[6/9] Setting up databases${NC}"
 if "$PROJECT_ROOT/infrastructure/scripts/setup-database.sh"; then
   echo -e "${GREEN}OK: Database setup completed${NC}"
 else
@@ -114,7 +125,7 @@ else
 fi
 
 # Deploy services (backend will connect with updated password)
-echo -e "${YELLOW}[6/8] Deploying services${NC}"
+echo -e "${YELLOW}[7/9] Deploying application services${NC}"
 if [ "$ENV" = "production" ]; then
   # Production: Use dedicated project name and production compose files
   docker compose -p epr-saas-production -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.production.yml --env-file ".env.$ENV" up -d --force-recreate --remove-orphans
@@ -133,7 +144,7 @@ sleep 3
 echo -e "${GREEN}OK: Backend restarted${NC}"
 
 # Health checks
-echo -e "${YELLOW}[7/8] Running health checks${NC}"
+echo -e "${YELLOW}[8/9] Running health checks${NC}"
 if "$PROJECT_ROOT/infrastructure/scripts/health-check.sh" "$ENV"; then
   echo -e "${GREEN}OK: Health checks passed${NC}"
 else
@@ -143,7 +154,7 @@ else
 fi
 
 # Smoke tests
-echo -e "${YELLOW}[8/8] Running smoke tests${NC}"
+echo -e "${YELLOW}[9/9] Running smoke tests${NC}"
 if "$PROJECT_ROOT/infrastructure/scripts/smoke-test.sh" "$ENV"; then
   echo -e "${GREEN}OK: Smoke tests passed${NC}"
 else
