@@ -126,11 +126,24 @@ fi
 
 # Deploy services (backend will connect with updated password)
 echo -e "${YELLOW}[7/9] Deploying application services${NC}"
+
+# Cleanup old containers to prevent name conflicts
+echo -e "${YELLOW}Cleaning up old containers (if any)${NC}"
 if [ "$ENV" = "production" ]; then
+  # Stop and remove production containers
+  docker stop epr-backend-prod epr-ai-chatbot-prod epr-web-frontend-prod 2>/dev/null || true
+  docker rm epr-backend-prod epr-ai-chatbot-prod epr-web-frontend-prod 2>/dev/null || true
+  echo -e "${GREEN}OK: Old production containers cleaned up${NC}"
+
   # Production: Use base.yml (no postgres/redis) + prod overrides
   docker compose -p epr-saas-production -f docker-compose.base.yml -f docker-compose.prod.yml -f docker-compose.production.yml --env-file ".env.$ENV" up -d --force-recreate --remove-orphans
   BACKEND_CONTAINER="epr-backend-prod"
 else
+  # Stop and remove staging containers
+  docker stop epr-backend epr-ai-chatbot-api epr-web-frontend 2>/dev/null || true
+  docker rm epr-backend epr-ai-chatbot-api epr-web-frontend 2>/dev/null || true
+  echo -e "${GREEN}OK: Old staging containers cleaned up${NC}"
+
   # Staging: Use base.yml (no postgres/redis) + staging overrides
   docker compose -p epr-saas-staging -f docker-compose.base.yml -f docker-compose.prod.yml -f docker-compose.staging.yml --env-file ".env.$ENV" up -d --force-recreate --remove-orphans
   BACKEND_CONTAINER="epr-backend"
