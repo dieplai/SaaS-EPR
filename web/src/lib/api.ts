@@ -342,7 +342,7 @@ export const chatbotAPI = {
       'Content-Type': 'application/json',
     };
 
-    const response = await fetch(`${CHATBOT_URL}/api/v1/chat`, {
+    const response = await fetch(`${CHATBOT_URL}/api/chat`, {
       method: 'POST',
       headers,
       credentials: 'include', // Send cookies automatically
@@ -429,7 +429,7 @@ export const chatbotAPI = {
     };
 
     // Fetch streaming response
-    const response = await fetch(`${CHATBOT_URL}/api/v1/chat`, {
+    const response = await fetch(`${CHATBOT_URL}/api/chat`, {
       method: 'POST',
       headers,
       credentials: 'include', // Send cookies automatically
