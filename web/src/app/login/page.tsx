@@ -34,7 +34,7 @@ export default function LoginPage() {
       await login(formData.email, formData.password, formData.remember);
 
       // Get user data after login to check role
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/v1/users/profile`, {
+      const response = await fetch(`/api/users/profile`, {
         credentials: 'include',
       });
 
