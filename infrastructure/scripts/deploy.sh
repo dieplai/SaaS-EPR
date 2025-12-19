@@ -80,7 +80,28 @@ export DEPLOY_ENV="$ENV"
 # Pull latest images
 echo -e "${YELLOW}[4/8] Pulling Docker images from registry${NC}"
 cd "$PROJECT_ROOT"
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file ".env.$ENV" pull
+
+# If GIT_SHA is provided (from CI/CD), pull specific SHA-tagged images
+# This ensures we get the EXACT image built in CI, not cached version
+if [ -n "$GIT_SHA" ]; then
+  SHORT_SHA="${GIT_SHA:0:7}"
+  echo -e "${YELLOW}Pulling images with SHA tag: $SHORT_SHA${NC}"
+
+  # Pull SHA-tagged images
+  docker pull "ghcr.io/dieplai/saas-epr-backend:${ENV}-${GIT_SHA}" && \
+    docker tag "ghcr.io/dieplai/saas-epr-backend:${ENV}-${GIT_SHA}" "ghcr.io/dieplai/saas-epr-backend:${ENV}"
+
+  docker pull "ghcr.io/dieplai/saas-epr-chatbot:${ENV}-${GIT_SHA}" && \
+    docker tag "ghcr.io/dieplai/saas-epr-chatbot:${ENV}-${GIT_SHA}" "ghcr.io/dieplai/saas-epr-chatbot:${ENV}"
+
+  docker pull "ghcr.io/dieplai/saas-epr-web:${ENV}-${GIT_SHA}" && \
+    docker tag "ghcr.io/dieplai/saas-epr-web:${ENV}-${GIT_SHA}" "ghcr.io/dieplai/saas-epr-web:${ENV}"
+else
+  # Fallback: pull mutable tags (less reliable due to caching)
+  echo -e "${YELLOW}No GIT_SHA provided, pulling mutable tags (may use cache)${NC}"
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file ".env.$ENV" pull
+fi
+
 echo -e "${GREEN}OK: Images pulled successfully${NC}"
 
 # Database setup BEFORE deploying services (critical for password sync)

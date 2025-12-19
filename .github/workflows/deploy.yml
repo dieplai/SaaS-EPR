@@ -141,6 +141,9 @@ jobs:
             export LANGCHAIN_API_KEY="${{ secrets.LANGCHAIN_API_KEY || '' }}"
             export TAVILY_API_KEY="${{ secrets.TAVILY_API_KEY || '' }}"
 
+            # Pass Git SHA for image versioning (DevOps best practice)
+            export GIT_SHA="${{ github.sha }}"
+
             # Run deploy script
             ./infrastructure/scripts/deploy.sh $DEPLOY_ENV
 
