@@ -2,8 +2,10 @@
 // API Client - Cookie-based Authentication
 // ============================================
 
-const API_URL = process.env.NEXT_PUBLIC_BROWSER_API_URL || 'http://localhost:8001/api/v1';
-const CHATBOT_URL = process.env.NEXT_PUBLIC_BROWSER_CHATBOT_URL || 'http://localhost:8000';
+// Use relative URLs - NGINX proxy handles routing to backend
+// This eliminates CORS issues and works across all environments
+const API_URL = '/api';
+const CHATBOT_URL = '/chat';
 
 // ============================================
 // Types
