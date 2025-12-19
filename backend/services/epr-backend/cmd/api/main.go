@@ -289,11 +289,31 @@ func createDefaultPackages(db *gorm.DB) error {
 
 	for _, pkg := range packages {
 		var existing subscriptioninfra.PackageModel
-		if err := db.Where("name = ?", pkg.Name).First(&existing).Error; err == gorm.ErrRecordNotFound {
+		// Use Unscoped to check for both deleted and non-deleted records
+		err := db.Unscoped().Where("name = ?", pkg.Name).First(&existing).Error
+
+		if err == gorm.ErrRecordNotFound {
+			// Package doesn't exist at all, create it
 			if err := db.Create(&pkg).Error; err != nil {
 				return err
 			}
+		} else if err != nil {
+			// Some other error occurred
+			return err
+		} else if existing.DeletedAt.Valid {
+			// Package exists but is soft-deleted, restore and update it
+			existing.DeletedAt = gorm.DeletedAt{}
+			existing.Description = pkg.Description
+			existing.Price = pkg.Price
+			existing.TokenLimit = pkg.TokenLimit
+			existing.DurationDays = pkg.DurationDays
+			existing.Features = pkg.Features
+			existing.IsActive = pkg.IsActive
+			if err := db.Unscoped().Save(&existing).Error; err != nil {
+				return err
+			}
 		}
+		// If package exists and is not deleted, do nothing (keep existing data)
 	}
 
 	return nil
