@@ -127,12 +127,12 @@ fi
 # Deploy services (backend will connect with updated password)
 echo -e "${YELLOW}[7/9] Deploying application services${NC}"
 if [ "$ENV" = "production" ]; then
-  # Production: Use dedicated project name and production compose files
-  docker compose -p epr-saas-production -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.production.yml --env-file ".env.$ENV" up -d --force-recreate --remove-orphans
+  # Production: Use base.yml (no postgres/redis) + prod overrides
+  docker compose -p epr-saas-production -f docker-compose.base.yml -f docker-compose.prod.yml -f docker-compose.production.yml --env-file ".env.$ENV" up -d --force-recreate --remove-orphans
   BACKEND_CONTAINER="epr-backend-prod"
 else
-  # Staging: Use dedicated project name and staging compose file (isolated from production)
-  docker compose -p epr-saas-staging -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.staging.yml --env-file ".env.$ENV" up -d --force-recreate --remove-orphans
+  # Staging: Use base.yml (no postgres/redis) + staging overrides
+  docker compose -p epr-saas-staging -f docker-compose.base.yml -f docker-compose.prod.yml -f docker-compose.staging.yml --env-file ".env.$ENV" up -d --force-recreate --remove-orphans
   BACKEND_CONTAINER="epr-backend"
 fi
 echo -e "${GREEN}OK: Services deployed${NC}"

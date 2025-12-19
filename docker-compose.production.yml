@@ -3,10 +3,10 @@
 # ============================================
 # Production-specific configuration
 # Runs alongside staging with different ports
-# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.production.yml up
+# Usage: docker-compose -f docker-compose.base.yml -f docker-compose.prod.yml -f docker-compose.production.yml up
 # ============================================
-# NOTE: postgres and redis services are NOT defined here
-#       They are managed separately and shared between staging and production
+# NOTE: Infrastructure (postgres/redis) is NOT included in base.yml
+#       They are managed separately via docker-compose.infrastructure.yml
 # ============================================
 
 services:
@@ -17,7 +17,6 @@ services:
     container_name: epr-backend-prod
     ports:
       - "8101:8001"  # Host:Container
-    depends_on: []  # Override to remove postgres/redis dependencies
 
   # ============================================
   # CHATBOT - Production ports & name
@@ -26,7 +25,6 @@ services:
     container_name: epr-ai-chatbot-prod
     ports:
       - "8100:8000"  # Host:Container
-    depends_on: []  # Override to remove postgres/redis dependencies
 
   # ============================================
   # FRONTEND - Production ports & name
@@ -35,5 +33,4 @@ services:
     container_name: epr-web-frontend-prod
     ports:
       - "3100:3000"  # Host:Container
-    depends_on: []  # Override to remove dependencies
     # Note: NEXT_PUBLIC_ vars are baked into image at build time, not runtime
