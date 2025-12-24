@@ -46,17 +46,39 @@ except:
 
 import uuid
 import tiktoken
+import re
+import asyncio
+from typing import AsyncIterator, Dict, Any, Literal, List, TypedDict
+
+# Qdrant imports
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams, PointStruct
+
+# Pydantic imports
+from pydantic import BaseModel, Field
 
 print("✓ All imports successful!")
 
-from langchain.schema import Document
-from langchain_openai import OpenAIEmbeddings
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
-import uuid
+# ============================================================================
+# IMPORT TẤT CẢ PROMPTS từ improved_prompts.py
+# File chứa tất cả prompts để dễ chỉnh sửa khi cần tune
+# ============================================================================
+from improved_prompts import (
+    # Answer generation
+    format_legal_prompt,              # Tạo prompt trả lời từ legal docs
+    format_faq_prompt,                # Tạo prompt trả lời từ FAQ
+    # Prompt builders (trả về ChatPromptTemplate)
+    create_question_rewriter_prompt,  # Viết lại câu hỏi có "đó", "này"
+    create_chitchat_prompt,           # Trò chuyện thân thiện
+    create_faq_router_prompt,         # Router: FAQ hay Chitchat?
+    create_legal_router_prompt        # Router: Legal hay Chitchat?
+)
 
-# Import improved prompts
-from improved_prompts import format_legal_prompt, format_faq_prompt
+# ============================================================================
+# IMPORT CONFIGURATION
+# Centralized config cho dễ tuning parameters
+# ============================================================================
+import config
 
 # ========== TOKEN COUNTING UTILITIES ==========
 
@@ -91,6 +113,41 @@ def truncate_text(text: str, max_tokens: int = 1000, model: str = "gpt-3.5-turbo
         return text[:max_chars] + "..."
 
 print("✓ Token counting utilities loaded")
+
+# ============================================================================
+# CENTRALIZED LLM CONFIGURATION
+# Tất cả LLM instances được tạo ở đây để dễ quản lý và tránh duplicate
+# ============================================================================
+
+# Fast LLM - For routing, grading, quick tasks (GPT-3.5-turbo)
+LLM_FAST = ChatOpenAI(
+    model=config.LLM_MODEL_FAST,
+    temperature=config.LLM_TEMP_DETERMINISTIC
+)
+
+# Smart LLM - For complex tasks requiring accuracy (GPT-4o-mini)
+LLM_SMART = ChatOpenAI(
+    model=config.LLM_MODEL_SMART,
+    temperature=config.LLM_TEMP_DETERMINISTIC
+)
+
+# Creative LLM - For chitchat, natural conversation (GPT-3.5-turbo with higher temp)
+LLM_CREATIVE = ChatOpenAI(
+    model=config.LLM_MODEL_FAST,
+    temperature=config.LLM_TEMP_CREATIVE
+)
+
+# Rewriter LLM - For question rewriting (GPT-4o-mini)
+LLM_REWRITER = ChatOpenAI(
+    model=config.LLM_MODEL_REWRITER,
+    temperature=config.LLM_TEMP_DETERMINISTIC
+)
+
+print("✓ Centralized LLM instances created:")
+print(f"  - LLM_FAST: {config.LLM_MODEL_FAST}")
+print(f"  - LLM_SMART: {config.LLM_MODEL_SMART}")
+print(f"  - LLM_CREATIVE: {config.LLM_MODEL_FAST} (temp={config.LLM_TEMP_CREATIVE})")
+print(f"  - LLM_REWRITER: {config.LLM_MODEL_REWRITER}")
 
 # ========== CONFIGURATION ==========
 
@@ -278,188 +335,13 @@ def _tokenize_vietnamese(text: str) -> set:
     
     return tokens
 
-# ========== INITIALIZE LLM ==========
-
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-
-# ========== INITIALIZE LLM FOR ANSWER GENERATION ==========
-
-llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
-
-print("✅ LLM initialized for answer generation")
-
-# ========== OLD FAQ PIPELINE REMOVED ==========
-# Old synchronous FAQ pipeline removed (replaced by optimized_chatbot_pipeline)
-
-
-
-llm_rewrite_legal = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-
-rewrite_prompt_legal_improved = ChatPromptTemplate.from_messages([
-    ("system", """Bạn là chuyên gia viết lại câu hỏi pháp luật.
-
-**NHIỆM VỤ:**
-1. Nếu câu hỏi có ĐẠI TỪ tham chiếu (đó, này, nó) → Thay thế bằng thông tin cụ thể từ lịch sử
-2. Nếu câu hỏi ĐÃ RÕ RÀNG (không có đại từ mơ hồ) → GIỮ NGUYÊN
-3. Nếu câu hỏi KHÔNG liên quan đến pháp luật → GIỮ NGUYÊN
-
-**CÁC DẠNG THAM CHIẾU CẦN XỬ LÝ:**
-- "nó", "đó", "này", "điều đó", "luật đó", "ở trên", "vừa rồi", "điều vừa đề cập" → Thay bằng Điều/Luật/Chương cụ thể
-- "các điều ở trên", "những điều đã nói", "các luật ở trên" → Liệt kê các Điều cụ thể từ lịch sử
-- "từ các điều trên", "dựa vào các điều đã nói" → Xác định các Điều từ lịch sử
-
-**⚠️ CỰC KỲ QUAN TRỌNG:**
-- CHỈ thay thế đại từ, KHÔNG thay đổi số điều cụ thể
-- Nếu câu hỏi đã có SỐ ĐIỀU CỤ THỂ (ví dụ: "điều 2", "Điều 77") → GIỮ NGUYÊN HOÀN TOÀN
-- TUYỆT ĐỐI KHÔNG thay đổi số điều trong câu hỏi gốc
-- KHÔNG thêm từ khóa từ lịch sử vào câu hỏi đã rõ ràng
-
-**QUY TẮC QUAN TRỌNG:**
-✅ CHỈ thay thế khi có đại từ mơ hồ
-✅ KHÔNG thêm ngữ cảnh vào câu hỏi đã rõ ràng
-✅ KHÔNG thêm "theo Điều X" vào câu hỏi mới về chủ đề khác
-✅ ĐỌC KỸ lịch sử để tìm Điều/Chương/Luật được nhắc đến
-✅ CHỈ trả về câu hỏi ngắn gọn (10-20 từ)
-✅ LUÔN giữ dạng câu hỏi với dấu "?"
-
-❌ TUYỆT ĐỐI KHÔNG trả lời câu hỏi
-❌ TUYỆT ĐỐI KHÔNG giải thích nội dung luật
-❌ TUYỆT ĐỐI KHÔNG thêm ngữ cảnh khi câu hỏi đã rõ ràng
-
-**PHÂN BIỆT CÂU HỎI MỚI vs CÂU HỎI TIẾP THEO:**
-
-Câu hỏi MỚI (chủ đề khác) → GIỮ NGUYÊN:
-- "Ai chịu trách nhiệm tái chế?" (đã rõ ràng, không cần thêm "theo Điều 7")
-- "EPR là gì?" (câu hỏi mới, đầy đủ)
-- "Quy định về bao bì?" (câu hỏi mới)
-
-Câu hỏi TIẾP THEO (có đại từ) → THAY THẾ:
-- "Điều đó có nói về X không?" → "Điều 7 có nói về X không?"
-- "Nó quy định gì?" → "Điều 7 quy định gì?"
-- "Cái này liên quan gì?" → "Điều 7 liên quan gì?"
-"""),
-
-    # Few-shot examples - Legal questions with pronouns (NEED TRANSFORMATION)
-    ("human", """Lịch sử: User: Cho tôi biết về điều 1? Assistant: Theo Điều 1...
-User: Cho tôi biết về điều 3? Assistant: Theo Điều 3...
-
-Câu hỏi: Từ các điều ở trên hãy cho tôi biết áp dụng được gì không?"""),
-    ("assistant", "Điều 1 và Điều 3 có thể áp dụng được gì"),
-
-    ("human", """Lịch sử: User: Cho tôi hỏi về điều luật số 7? Assistant: Theo Điều 7...
-
-Câu hỏi: Điều luật đó có nói về không khí hay không?"""),
-    ("assistant", "Điều 7 có nói về không khí không"),
-
-    # Few-shot examples - Clear legal questions (KEEP ORIGINAL)
-    ("human", """Lịch sử: User: Cho tôi hỏi về Điều 7? Assistant: Theo Điều 7... nói về quản lý không khí
-
-Câu hỏi: Ai chịu trách nhiệm tái chế?"""),
-    ("assistant", "Ai chịu trách nhiệm tái chế?"),
-
-    ("human", """Lịch sử: User: Điều 77 là gì? Assistant: Điều 77 về tái chế...
-
-Câu hỏi: Quy định về bao bì là gì?"""),
-    ("assistant", "Quy định về bao bì là gì?"),
-
-    # IMPORTANT: Questions with specific article numbers - NEVER CHANGE THEM
-    ("human", """Lịch sử: User: Cho tôi hỏi về Điều 5? Assistant: Theo Điều 5...
-User: Điều 6 quy định gì? Assistant: Theo Điều 6...
-
-Câu hỏi: Cho tôi hỏi chi tiết về điều 2 và điều 3?"""),
-    ("assistant", "Cho tôi hỏi chi tiết về điều 2 và điều 3?"),
-
-    ("human", """Lịch sử: User: Điều 10 là gì? Assistant: Điều 10 về...
-
-Câu hỏi: Điều 1 quy định gì?"""),
-    ("assistant", "Điều 1 quy định gì?"),
-
-    ("human", """Lịch sử: (trống)
-
-Câu hỏi: Cho tôi hỏi về điều luật số 1?"""),
-    ("assistant", "Điều 1 quy định gì"),
-
-    # Few-shot examples - Non-legal questions (KEEP ORIGINAL)
-    ("human", """Lịch sử: (trống)
-
-Câu hỏi: Xin chào!"""),
-    ("assistant", "Xin chào!"),
-
-    ("human", """Lịch sử: (trống)
-
-Câu hỏi: Cảm ơn bạn"""),
-    ("assistant", "Cảm ơn bạn"),
-
-    ("human", """Lịch sử: (trống)
-
-Câu hỏi: Làm thế nào để nấu phở?"""),
-    ("assistant", "Làm thế nào để nấu phở?"),
-
-    # Actual query
-    ("human", """Lịch sử: {chat_history}
-
-Câu hỏi: {question}
-
-**HƯỚNG DẪN PHÂN TÍCH:**
-1. Câu hỏi có SỐ ĐIỀU CỤ THỂ không? (điều 1, Điều 77, điều 2 và điều 3)
-   - CÓ SỐ CỤ THỂ → GIỮ NGUYÊN HOÀN TOÀN (đừng thay đổi số điều!)
-   - KHÔNG CÓ SỐ → Chuyển sang bước 2
-
-2. Câu hỏi có chứa đại từ mơ hồ không? (đó, này, nó, ở trên, vừa rồi)
-   - CÓ → Thay thế bằng thông tin từ lịch sử
-   - KHÔNG → Chuyển sang bước 3
-
-3. Câu hỏi đã đầy đủ và rõ ràng chưa?
-   - ĐÃ RÕ RÀNG → GIỮ NGUYÊN (không thêm gì)
-   - CHƯA RÕ → Làm rõ từ lịch sử
-
-**LƯU Ý:**
-- ⚠️ TUYỆT ĐỐI GIỮ NGUYÊN số điều trong câu hỏi gốc (điều 2 phải vẫn là điều 2, KHÔNG thay thành số khác!)
-- Nếu có "các điều ở trên", "những điều đã nói" → TÌM TẤT CẢ Điều trong lịch sử và liệt kê
-- Nếu có "điều đó", "nó" → TÌM Điều GẦN NHẤT trong lịch sử
-- LUÔN LUÔN giữ dạng câu hỏi với dấu "?"
-- TUYỆT ĐỐI KHÔNG thêm "theo Điều X" vào câu hỏi đã rõ ràng
-- Nếu câu hỏi KHÔNG liên quan pháp luật → GIỮ NGUYÊN
-
-**VÍ DỤ QUAN TRỌNG:**
-
-❌ SAI:
-Lịch sử: "User: có điều nào về tái chế?\nAssistant: Điều 3 về tái chế..."
-Câu gốc: "nói rõ các điều đó ra"
-Chuyển thành: "Nói rõ Điều 3 về tái chế ra?"  ❌ THÊM "về tái chế" không cần thiết!
-
-✅ ĐÚNG:
-Lịch sử: "User: có điều nào về tái chế?\nAssistant: Điều 3 về tái chế..."
-Câu gốc: "nói rõ các điều đó ra"
-Chuyển thành: "Nói rõ Điều 3 ra?"  ✅ CHỈ thay "điều đó" → "Điều 3"
-
-❌ SAI:
-Lịch sử: "User: Điều 77 là gì?\nAssistant: Điều 77 về trách nhiệm..."
-Câu gốc: "Điều đó có nói về bao bì không?"
-Chuyển thành: "Điều 77 có nói về bao bì và trách nhiệm không?"  ❌ THÊM "trách nhiệm"!
-
-✅ ĐÚNG:
-Lịch sử: "User: Điều 77 là gì?\nAssistant: Điều 77 về trách nhiệm..."
-Câu gốc: "Điều đó có nói về bao bì không?"
-Chuyển thành: "Điều 77 có nói về bao bì không?"  ✅ CHỈ thay "đó" → "77"
-
-❌ SAI - THAY ĐỔI SỐ ĐIỀU:
-Lịch sử: "User: Điều 5 là gì?\nAssistant: Điều 5...\nUser: Điều 6?\nAssistant: Điều 6..."
-Câu gốc: "Cho tôi hỏi chi tiết về điều 2 và điều 3?"
-Chuyển thành: "Cho tôi hỏi chi tiết về Điều 6 và Điều 7?"  ❌ SAI! Đã thay đổi số điều!
-
-✅ ĐÚNG - GIỮ NGUYÊN SỐ ĐIỀU:
-Lịch sử: "User: Điều 5 là gì?\nAssistant: Điều 5...\nUser: Điều 6?\nAssistant: Điều 6..."
-Câu gốc: "Cho tôi hỏi chi tiết về điều 2 và điều 3?"
-Chuyển thành: "Cho tôi hỏi chi tiết về điều 2 và điều 3?"  ✅ ĐÚNG! Giữ nguyên số điều gốc!
-
-Câu hỏi viết lại (CHỈ câu hỏi ngắn, hoặc giữ nguyên nếu đã rõ):"""),
-])
-
-question_rewriter_legal = rewrite_prompt_legal_improved | llm_rewrite_legal | StrOutputParser()
-
-print("✅ Question rewriter với xử lý reference context và ngăn over-adding")
+# ============================================================================
+# QUESTION REWRITER: Viết lại câu có đại từ ("đó", "này") thành câu rõ ràng
+# Prompt được load từ improved_prompts.py
+# ============================================================================
+rewrite_prompt_legal_improved = create_question_rewriter_prompt()
+question_rewriter_legal = rewrite_prompt_legal_improved | LLM_REWRITER | StrOutputParser()
+print("✅ Question rewriter loaded from improved_prompts.py")
 
 
 def transform_query(state):
@@ -533,37 +415,13 @@ def chitchat(state):
 
     print(f"  Độ dài lịch sử: {len(chat_history)} ký tự")
 
-    llm_chat = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7)
-
-    chitchat_prompt = ChatPromptTemplate.from_messages([
-        ("system", """Bạn là **trợ lý pháp lý thông minh** hỗ trợ người dùng tra cứu và giải thích văn bản pháp luật Việt Nam.
-
-**QUY TẮC QUAN TRỌNG VỀ BỘ NHỚ:**
-1. **LUÔN ĐỌC KỸ lịch sử hội thoại** trước khi trả lời
-2. **SỬ DỤNG thông tin** mà người dùng đã cung cấp trong lịch sử (tên, công ty, hoàn cảnh, etc.)
-3. **GHI NHỚ context** từ các câu hỏi và trả lời trước đó
-4. Nếu người dùng hỏi về thông tin họ đã cung cấp → **TRẢ LỜI dựa trên lịch sử**, KHÔNG nói "không biết"
-
-**VÍ DỤ:**
-- Nếu lịch sử có: "User: Tôi tên là Danh Thuận"
-  → Khi user hỏi "Tên tôi là gì?" → Trả lời: "Tên của bạn là Danh Thuận"
-
-- Nếu lịch sử có: "User: Tôi làm việc tại công ty ABC"
-  → Khi user hỏi "Tôi làm ở đâu?" → Trả lời: "Bạn làm việc tại công ty ABC"
-
-**HƯỚNG DẪN TRẢ LỜI:**
-- Giải thích luật một cách rõ ràng, trung lập, dễ hiểu
-- Nếu câu trả lời dựa trên văn bản pháp luật → nêu rõ tên văn bản và Điều/Mục/Chương
-- Nếu thông tin từ web → nói rõ là tham khảo
-- Giữ giọng điệu thân thiện, chuyên nghiệp
-- **Nếu câu hỏi không rõ ràng hoặc vô nghĩa** (VD: chuỗi ký tự ngẫu nhiên), hãy lịch sự yêu cầu người dùng làm rõ câu hỏi của họ
-
-📋 Lịch sử hội thoại (ĐỌC KỸ):
-{chat_history}"""),
-        ("human", "{question}"),
-    ])
-
-    chitchat_chain = chitchat_prompt | llm_chat | StrOutputParser()
+    # ========================================================================
+    # CHITCHAT: Trả lời câu hỏi chào hỏi, trò chuyện thân thiện
+    # Prompt được load từ improved_prompts.py
+    # ========================================================================
+    chitchat_prompt = create_chitchat_prompt()
+    chitchat_chain = chitchat_prompt | LLM_CREATIVE | StrOutputParser()
+    print("✓ Chitchat prompt loaded from improved_prompts.py")
 
     generation = chitchat_chain.invoke({
         "question": question,
@@ -583,10 +441,9 @@ def chitchat(state):
 
 print("✓ Hàm chitchat với memory emphasis")
 
-from typing import Literal
-from pydantic import BaseModel, Field
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
+# ============================================================================
+# FAQ ROUTE MODEL
+# ============================================================================
 class FaqRouteQuery(BaseModel):
     """Phân loại câu hỏi người dùng tới FAQ, web search hoặc chitchat"""
     datasource: Literal["vectorstore_faq", "chitchat"] = Field(
@@ -597,35 +454,14 @@ class FaqRouteQuery(BaseModel):
         )
     )
 
-# ========== KHỞI TẠO LLM ROUTER ==========
-llm_router_faq = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
-structured_llm_router_faq = llm_router_faq.with_structured_output(FaqRouteQuery)
-
-# ========== SYSTEM PROMPT ==========
-router_system_faq = """Bạn là chuyên gia phân loại câu hỏi người dùng tới nguồn dữ liệu phù hợp.
-
-Bạn có quyền truy cập các nguồn:
-1. **vectorstore_faq** - FAQ pháp luật đã được biên soạn
-2. **chitchat** - Giao tiếp thân thiện, hỏi thăm, cảm ơn, chào hỏi
-
-Quy tắc ưu tiên:
-- Nếu câu hỏi mang tính chào hỏi,trò chuyện, cảm ơn, giới thiệu bản thân → **chitchat**
-- Nếu câu hỏi là chuỗi ký tự vô nghĩa, ngẫu nhiên, hoặc không có ý nghĩa rõ ràng (VD: "E, P, A, L, A, Z", "asdfgh", "123 abc xyz") → **chitchat**
-- Nếu câu hỏi quá ngắn hoặc không rõ ràng và không liên quan đến pháp luật → **chitchat**
-- CHỈ nếu câu hỏi có ý nghĩa rõ ràng và liên quan đến nội dung pháp luật EPR → **vectorstore_faq**
-
-Câu hỏi hiện tại: {question}"""
-
-# ========== TẠO PROMPT ==========
-route_prompt_faq = ChatPromptTemplate.from_messages([
-    ("system", router_system_faq),
-    ("human", "{question}")
-])
-
-# ========== COMBINE PROMPT VỚI STRUCTURED LLM ==========
+# ============================================================================
+# FAQ ROUTER: Phân loại câu hỏi → FAQ hoặc Chitchat
+# Prompt được load từ improved_prompts.py
+# ============================================================================
+structured_llm_router_faq = LLM_FAST.with_structured_output(FaqRouteQuery)
+route_prompt_faq = create_faq_router_prompt()
 question_router_faq = route_prompt_faq | structured_llm_router_faq
-
-print("✓ FAQ question router created successfully!")
+print("✓ FAQ router loaded from improved_prompts.py")
 
 def route_question_faq(state):
     """Route câu hỏi ban đầu và lưu snapshot của chat_history"""
@@ -666,155 +502,6 @@ def route_question_faq(state):
 print("✅ route_question_faq với chat_history snapshot")
 
 
-from typing import List, TypedDict
-from langgraph.graph import StateGraph, END
-
-
-print("✓ State defined")
-
-# ========== NODE FUNCTIONS ==========
-
-def retrieve_faq_node(state):
-    """Retrieve FAQ documents"""
-    print("\n" + "="*80)
-    print("📚 RETRIEVE FAQ")
-    print("="*80)
-
-    question = state["question"]
-    print(f"  Question: {question}")
-
-    # Use your existing retrieve_faq_top1 function
-    documents = retrieve_faq_top1(question, score_threshold=0.75)
-
-    print(f"  Documents found: {len(documents)}")
-    print("="*80 + "\n")
-
-    state["documents"] = documents
-    return state
-
-
-
-
-def generate_faq_node(state):
-    """Generate answer from FAQ documents"""
-    print("\n" + "="*80)
-    print("💬 GENERATE FAQ ANSWER")
-    print("="*80)
-
-    question = state["question"]
-    documents = state["documents"]
-
-    if not documents:
-        print("  ⚠️  No documents")
-        state["generation"] = "Không tìm thấy thông tin trong FAQ."
-        return state
-
-    doc = documents[0]
-    faq_question = doc.metadata.get("Câu_hỏi", "")
-    faq_answer = doc.page_content
-
-    print(f"  FAQ: {faq_question[:60]}...")
-
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", """Bạn là trợ lý AI chuyên về luật EPR.
-Dựa vào FAQ để trả lời câu hỏi."""),
-        ("human", """FAQ: {faq_question}
-Trả lời: {faq_answer}
-
-Câu hỏi: {user_question}
-
-Trả lời:""")
-    ])
-
-    chain = prompt | llm | StrOutputParser()
-
-    generation = chain.invoke({
-        "faq_question": faq_question,
-        "faq_answer": faq_answer,
-        "user_question": question
-    })
-
-    print(f"  Answer: {generation[:80]}...")
-    print("="*80 + "\n")
-
-    state["generation"] = generation
-    return state
-
-
-def new_round_router(state):
-    """
-    Reset state and restore chat_history from snapshot
-    """
-    print("\n" + "="*80)
-    print("🔁 NEW ROUND: RESETTING STATE")
-    print("="*80)
-
-    # ✅ Restore chat_history from snapshot
-    original_chat_history = state.get("original_chat_history", "")
-    current_chat_history = state.get("chat_history", "")
-
-    # Prefer original snapshot
-    chat_history_to_use = original_chat_history if original_chat_history else current_chat_history
-
-    # Restore original question
-    original_question = state.get("original_question", state.get("question", ""))
-
-    print(f"  📌 Restoring original question: {original_question}")
-
-    if original_chat_history:
-        print(f"  💬 Restoring chat history from snapshot ({len(original_chat_history)} chars)")
-        print(f"     (Ignoring modified chat history from FAQ path)")
-    elif current_chat_history:
-        print(f"  💬 Using current chat history ({len(current_chat_history)} chars)")
-    else:
-        print(f"  ⚠️  No chat history")
-
-    print("="*80 + "\n")
-
-    return {
-        **state,
-        "question": original_question,
-        "original_question": original_question,
-        "chat_history": chat_history_to_use,  # ✅ Use clean snapshot
-        "original_chat_history": original_chat_history,  # ✅ Keep snapshot
-        "retries": 0,
-        "generation_retries": 0,
-        "documents": [],
-        "generation": "",
-    }
-
-print("✅ new_round_router ready")
-
-
-
-# ========== DECISION FUNCTIONS ==========
-
-def decide_after_retrieve_faq(state):
-    """
-    Decision function after retrieve_faq_node
-
-    Check if documents were retrieved:
-    - If yes (has docs) → go to "generate_faq"
-    - If no (no docs) → go to "new_round_router"
-
-    Returns:
-        str: "generate_faq" or "new_round_router"
-    """
-    documents = state.get("documents", [])
-
-    print(f"\n🔀 DECISION AFTER RETRIEVE FAQ")
-    print(f"   Documents: {len(documents)}")
-
-    if documents:
-        print(f"   ➡️  HAS DOCS → generate_faq")
-        return "generate_faq"
-    else:
-        print(f"   ➡️  NO DOCS → new_round_router")
-        return "new_round_router"
-
-
-
-
 
 
 # ========== LEGAL DATA - Using Qdrant Cloud ==========
@@ -824,12 +511,7 @@ def decide_after_retrieve_faq(state):
 
 # ========== LEGAL DATA VECTORSTORE - Using Qdrant Cloud ==========
 
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_qdrant import QdrantVectorStore
-
-# Initialize LLMs
-llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
-llm_creative = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7)
 
 # Initialize embeddings
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
@@ -898,7 +580,7 @@ metadata_fields = [
 
 # --- Khởi tạo LLM ---
 # Using gpt-4o-mini for better Unicode handling and structured output
-llm_query = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+llm_query = LLM_SMART  # Reuse centralized LLM
 
 # --- Tạo prompt constructor với allowed_operators ---
 prompt_truy_van_phap_luat = get_query_constructor_prompt(
@@ -914,9 +596,14 @@ prompt_truy_van_phap_luat = get_query_constructor_prompt(
     ],
     allowed_operators=[Operator.AND, Operator.OR],  # Enable AND and OR
     examples=[
-        # Tìm theo số điều
+        # Tìm theo số điều - NHIỀU BIẾN THỂ
         ("Điều 6 quy định gì?", {"query": "nội dung điều 6", "filter": 'eq("Dieu_Number", 6)'}),
         ("Cho tôi hỏi về Điều 9?", {"query": "về điều 9", "filter": 'eq("Dieu_Number", 9)'}),
+        ("cho tôi biết về điều 5", {"query": "thông tin điều 5", "filter": 'eq("Dieu_Number", 5)'}),
+        ("thông tin về điều 99", {"query": "nội dung điều 99", "filter": 'eq("Dieu_Number", 99)'}),
+        ("nói rõ về điều 10", {"query": "giải thích điều 10", "filter": 'eq("Dieu_Number", 10)'}),
+        ("điều 77 là gì", {"query": "định nghĩa điều 77", "filter": 'eq("Dieu_Number", 77)'}),
+        ("cho tôi biết thêm thông tin về điều 20", {"query": "chi tiết điều 20", "filter": 'eq("Dieu_Number", 20)'}),
 
         # Tìm theo chương (chuyển đổi sang số La Mã)
         ("Chương 1 quy định gì?", {"query": "chương 1", "filter": 'like("Chuong", "Chương I")'}),
@@ -939,6 +626,28 @@ prompt_truy_van_phap_luat = get_query_constructor_prompt(
 
         # Nhiều điều
         ("Điều 5 hoặc Điều 6", {"query": "điều 5 điều 6", "filter": 'or(eq("Dieu_Number", 5), eq("Dieu_Number", 6))'}),
+
+        # ========== CÂU HỎI ĐẾM SỐ LƯỢNG ==========
+        # Đếm số điều trong chương (chuyển số sang La Mã)
+        ("trong chương 1 có bao nhiêu điều", {"query": "đếm điều trong chương 1", "filter": 'like("Chuong", "Chương I")'}),
+        ("chương 2 có bao nhiêu điều", {"query": "đếm điều chương 2", "filter": 'like("Chuong", "Chương II")'}),
+        ("chương 3 có mấy điều", {"query": "đếm điều chương 3", "filter": 'like("Chuong", "Chương III")'}),
+        ("trong chương II có bao nhiêu điều", {"query": "đếm điều chương II", "filter": 'like("Chuong", "Chương II")'}),
+        ("chương IV có bao nhiêu điều", {"query": "đếm điều chương IV", "filter": 'like("Chuong", "Chương IV")'}),
+        ("trong chương V có mấy điều", {"query": "đếm điều chương V", "filter": 'like("Chuong", "Chương V")'}),
+
+        # Đếm số mục trong chương
+        ("trong chương 1 có bao nhiêu mục", {"query": "đếm mục trong chương 1", "filter": 'like("Chuong", "Chương I")'}),
+        ("chương 2 có mấy mục", {"query": "đếm mục chương 2", "filter": 'like("Chuong", "Chương II")'}),
+        ("trong chương III có bao nhiêu mục", {"query": "đếm mục chương III", "filter": 'like("Chuong", "Chương III")'}),
+
+        # Đếm số điều trong mục
+        ("trong mục 1 có bao nhiêu điều", {"query": "đếm điều trong mục 1", "filter": 'like("Muc", "Mục 1")'}),
+        ("mục 2 có mấy điều", {"query": "đếm điều mục 2", "filter": 'like("Muc", "Mục 2")'}),
+
+        # Đếm số điều trong mục của chương (kết hợp filter)
+        ("trong mục 1 của chương 2 có bao nhiêu điều", {"query": "đếm điều mục 1 chương 2", "filter": 'and(like("Muc", "Mục 1"), like("Chuong", "Chương II"))'}),
+        ("mục 2 chương 3 có mấy điều", {"query": "đếm điều mục 2 chương 3", "filter": 'and(like("Muc", "Mục 2"), like("Chuong", "Chương III"))'}),
 
         # Không có filter cụ thể
         ("Trách nhiệm của tổ chức sản xuất", {"query": "trách nhiệm tổ chức sản xuất", "filter": None}),
@@ -1036,69 +745,136 @@ class FallbackLegalRetriever:
         # ✅ Create translator to convert LangChain filters to Qdrant format
         self.translator = QdrantTranslator(metadata_key="metadata")
 
-    def invoke(self, query: str):
-        """Get documents with fallback strategy"""
+    async def ainvoke(self, query: str):
+        """
+        ⚡ PARALLEL fallback strategy - Query với và không filter ĐỒNG THỜI
+        Tránh 2x latency của sequential fallback
+        """
         print(f"\n{'='*80}")
-        print(f"🔍 FALLBACK RETRIEVER")
+        print(f"🔍 ⚡ PARALLEL FALLBACK RETRIEVER")
         print(f"{'='*80}")
         print(f"Query: {query}")
 
-        # Step 1: Construct structured query
-        structured_query = self.query_constructor.invoke({"query": query})
+        # Step 1: Construct structured query (run in thread pool to avoid event loop issues)
+        loop = asyncio.get_event_loop()
+        structured_query = await loop.run_in_executor(
+            None,
+            lambda: self.query_constructor.invoke({"query": query})
+        )
 
         print(f"Structured query:")
         print(f"  Query: {structured_query.query}")
         print(f"  Filter: {structured_query.filter}")
 
-        # Step 2: Try with filter first
+        # Step 2: Parallel search with and without filter
         if structured_query.filter:
-            print(f"\n🔍 Searching WITH filter...")
+            print(f"\n⚡ Running PARALLEL search (with + without filter)...")
 
-            # ✅ Translate LangChain filter to Qdrant filter
-            try:
-                result = self.translator.visit_structured_query(structured_query)
+            async def search_with_filter():
+                """Search with filter"""
+                try:
+                    # Translate LangChain filter to Qdrant filter (sync operation in thread pool)
+                    result = await loop.run_in_executor(
+                        None,
+                        lambda: self.translator.visit_structured_query(structured_query)
+                    )
 
-                # Extract filter from the result (it returns a tuple/dict)
-                if isinstance(result, tuple):
-                    # Result is (query, filter_dict)
-                    _, filter_dict = result
-                    qdrant_filter = filter_dict.get('filter') if isinstance(filter_dict, dict) else filter_dict
-                elif isinstance(result, dict):
-                    # Result is {'filter': Filter(...)}
-                    qdrant_filter = result.get('filter', result)
-                else:
-                    # Result is directly the filter
-                    qdrant_filter = result
+                    # Extract filter from the result
+                    if isinstance(result, tuple):
+                        _, filter_dict = result
+                        qdrant_filter = filter_dict.get('filter') if isinstance(filter_dict, dict) else filter_dict
+                    elif isinstance(result, dict):
+                        qdrant_filter = result.get('filter', result)
+                    else:
+                        qdrant_filter = result
 
-                print(f"   Using Qdrant filter: {qdrant_filter}")
+                    # Run in thread pool (similarity_search is sync)
+                    docs = await loop.run_in_executor(
+                        None,
+                        lambda: self.vectorstore.similarity_search(
+                            structured_query.query,
+                            k=self.k,
+                            filter=qdrant_filter
+                        )
+                    )
+                    return docs, "with_filter"
+                except Exception as e:
+                    print(f"  ⚠️ Error with filter: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return [], "with_filter_error"
 
-                docs = self.vectorstore.similarity_search(
+            async def search_without_filter():
+                """Search without filter"""
+                try:
+                    docs = await loop.run_in_executor(
+                        None,
+                        lambda: self.vectorstore.similarity_search(
+                            structured_query.query,
+                            k=self.k
+                        )
+                    )
+                    return docs, "without_filter"
+                except Exception as e:
+                    print(f"  ⚠️ Error without filter: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return [], "without_filter_error"
+
+            # ⚡ Run both searches in parallel
+            results = await asyncio.gather(
+                search_with_filter(),
+                search_without_filter(),
+                return_exceptions=True
+            )
+
+            with_filter_docs, with_filter_type = results[0]
+            without_filter_docs, without_filter_type = results[1]
+
+            # Priority: Use filtered results if available
+            if with_filter_docs:
+                print(f"✅ Using {len(with_filter_docs)} documents WITH filter")
+                print(f"{'='*80}\n")
+                return with_filter_docs
+            elif without_filter_docs:
+                print(f"⚠️ No results with filter, using {len(without_filter_docs)} documents WITHOUT filter")
+                print(f"{'='*80}\n")
+                return without_filter_docs
+            else:
+                print(f"❌ No results found")
+                print(f"{'='*80}\n")
+                return []
+        else:
+            # No filter specified, just search normally
+            print(f"\n🔍 Searching WITHOUT filter (no filter specified)...")
+            docs = await loop.run_in_executor(
+                None,
+                lambda: self.vectorstore.similarity_search(
                     structured_query.query,
-                    k=self.k,
-                    filter=qdrant_filter  # ✅ Use translated filter
+                    k=self.k
                 )
+            )
+            print(f"✅ Found {len(docs)} documents")
+            print(f"{'='*80}\n")
+            return docs
 
-                if docs:
-                    print(f"✅ Found {len(docs)} documents with filter")
-                    print(f"{'='*80}\n")
-                    return docs
-                else:
-                    print(f"⚠️  No results with filter, trying without filter...")
-            except Exception as e:
-                print(f"⚠️  Error with filter: {e}")
-                print(f"   Trying without filter...")
-
-        # Step 3: Fallback to search without filter
-        print(f"\n🔍 Searching WITHOUT filter...")
-        docs = self.vectorstore.similarity_search(
-            structured_query.query,
-            k=self.k
-        )
-
-        print(f"✅ Found {len(docs)} documents without filter")
-        print(f"{'='*80}\n")
-
-        return docs
+    def invoke(self, query: str):
+        """
+        Synchronous wrapper for ainvoke
+        Giữ nguyên interface cũ để tương thích
+        """
+        # Run async function
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Nếu đang trong async context
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(
+                    lambda: asyncio.run(self.ainvoke(query))
+                ).result()
+        else:
+            # Nếu không trong async context
+            return asyncio.run(self.ainvoke(query))
 
 
 # ✅ Create fallback retriever
@@ -1109,6 +885,134 @@ fallback_retriever = FallbackLegalRetriever(
 )
 
 print("✅ Fallback retriever created!")
+
+# ========== QUERY CLARITY ANALYSIS WITH LLM ==========
+
+def analyze_query_clarity(query: str, chat_history: str = "") -> dict:
+    """
+    Use LLM to analyze if a query is clear, ambiguous, or illogical
+
+    Returns:
+        dict with keys:
+            - is_clear: bool - whether the question is clear and logical
+            - issue_type: str - "clear" | "illogical" | "ambiguous" | "insufficient_context"
+            - clarifying_question: str - question to ask user for clarification
+    """
+
+    # Import clarity analysis prompt from improved_prompts.py
+    from improved_prompts import create_clarity_analysis_prompt
+    clarity_prompt = create_clarity_analysis_prompt()
+
+    clarity_chain = clarity_prompt | LLM_SMART | StrOutputParser()
+
+    try:
+        result_str = clarity_chain.invoke({
+            "query": query,
+            "chat_history": chat_history or "Không có"
+        })
+
+        # Parse JSON response
+        import json
+        # Remove markdown if present
+        result_str = result_str.strip()
+        if result_str.startswith("```json"):
+            result_str = result_str[7:]
+        if result_str.startswith("```"):
+            result_str = result_str[3:]
+        if result_str.endswith("```"):
+            result_str = result_str[:-3]
+        result_str = result_str.strip()
+
+        result = json.loads(result_str)
+
+        print(f"\n{'='*80}")
+        print(f"🔍 QUERY CLARITY ANALYSIS")
+        print(f"{'='*80}")
+        print(f"  Query: {query}")
+        print(f"  Chat History Length: {len(chat_history) if chat_history else 0} chars")
+        print(f"  Chat History (last 1000 chars): ...{chat_history[-1000:] if chat_history else 'None'}")
+        print(f"  Is Clear: {result.get('is_clear')}")
+        print(f"  Issue Type: {result.get('issue_type')}")
+        if not result.get('is_clear'):
+            print(f"  Clarifying Question: {result.get('clarifying_question')}")
+        print(f"{'='*80}\n")
+
+        # 🔍 DETECTION: User confirming a suggestion
+        # If query is simple confirmation words and chat history contains a suggestion
+        confirmation_words = ["đúng", "vậy", "ừ", "ok", "được", "yes", "yeah", "right", "correct"]
+        query_lower = query.lower().strip()
+
+        is_confirmation = any(word in query_lower for word in confirmation_words)
+
+        if result.get("is_clear") and is_confirmation and chat_history:
+            # Try to extract suggested query from chat history
+            import re
+
+            # Pattern 1: Direct quote "..." in suggestion
+            pattern1 = r'Có thể bạn muốn hỏi.*?["\'](.*?)["\']'
+
+            # Pattern 2: "số lượng X trong Y" → transform to "trong Y có bao nhiêu X"
+            pattern2_counting = r'số\s+lượng\s+(điều|mục|chương)\s+trong\s+(Mục|Chương|Điều)\s+(\d+)'
+
+            # Pattern 3: Generic "về X?"
+            pattern3 = r'Có thể bạn muốn hỏi.*?về\s+(.*?)\?'
+
+            suggested_query = None
+
+            # Try pattern 1 first (quoted suggestions)
+            match = re.search(pattern1, chat_history, re.IGNORECASE | re.DOTALL)
+            if match:
+                suggested_query = match.group(1).strip()
+                print(f"   🔄 User confirmed suggestion!")
+                print(f"   📝 Extracted from quotes: {suggested_query}")
+            else:
+                # Try pattern 2 (counting pattern)
+                match = re.search(pattern2_counting, chat_history, re.IGNORECASE)
+                if match:
+                    what = match.group(1)  # điều/mục/chương
+                    where_type = match.group(2)  # Mục/Chương/Điều
+                    where_num = match.group(3)  # number
+                    suggested_query = f"trong {where_type.lower()} {where_num} có bao nhiêu {what.lower()}"
+                    print(f"   🔄 User confirmed counting suggestion!")
+                    print(f"   📝 Transformed to: {suggested_query}")
+                else:
+                    # Try pattern 3 (generic)
+                    match = re.search(pattern3, chat_history, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        suggested_query = match.group(1).strip()
+                        print(f"   🔄 User confirmed suggestion!")
+                        print(f"   📝 Extracted: {suggested_query}")
+
+            if suggested_query:
+                result["transformed_query"] = suggested_query
+            else:
+                # Fallback: If no specific suggestion found but chat history ends with "?"
+                # Extract the last question from Assistant
+                assistant_lines = [line for line in chat_history.split('\n') if line.startswith('Assistant:')]
+                if assistant_lines:
+                    last_assistant_msg = assistant_lines[-1].replace('Assistant:', '').strip()
+                    # If it's a question, try to infer what user wants
+                    if '?' in last_assistant_msg and 'nội dung' in last_assistant_msg.lower():
+                        # Extract what they're asking about (e.g., "Điều 5")
+                        match = re.search(r'(Điều|Mục|Chương)\s+\d+', last_assistant_msg, re.IGNORECASE)
+                        if match:
+                            section = match.group(0)
+                            result["transformed_query"] = f"nội dung của {section}"
+                            print(f"   🔄 Inferred query from context: {result['transformed_query']}")
+
+        return result
+
+    except Exception as e:
+        print(f"⚠️ Error in clarity analysis: {e}")
+        import traceback
+        traceback.print_exc()
+        # If analysis fails, assume query is clear and continue
+        return {
+            "is_clear": True,
+            "issue_type": "clear",
+            "clarifying_question": ""
+        }
+
 
 # ========== COUNTING LOGIC FOR "HOW MANY" QUESTIONS ==========
 
@@ -1133,21 +1037,79 @@ def is_counting_question(query: str) -> bool:
     return any(keyword in query_lower for keyword in counting_keywords)
 
 
-def count_articles_with_filter(structured_query, translator, vectorstore) -> dict:
+def validate_counting_question(query: str) -> dict:
     """
-    Count unique articles (Dieu_Number) matching the structured query filter
+    Validate if a counting question is logically valid
+
+    Returns:
+        dict with keys:
+            - valid: bool - whether the question is valid
+            - error_message: str - error message if invalid
+            - suggestion: str - suggestion for user to rephrase
+    """
+    query_lower = query.lower()
+
+    # Pattern 1: Đếm "chương" trong "chương" - illogical
+    if "chương" in query_lower and any(word in query_lower for word in ["bao nhiêu chương", "mấy chương", "số lượng chương"]):
+        # Check if asking about chapters WITHIN a chapter
+        if any(pattern in query_lower for pattern in ["trong chương", "ở chương", "của chương"]):
+            return {
+                "valid": False,
+                "error_message": "Câu hỏi không hợp lý: Một chương không thể chứa chương khác.",
+                "suggestion": "Bạn có thể hỏi: 'Trong chương X có bao nhiêu điều?' hoặc 'Trong chương X có bao nhiêu mục?'"
+            }
+
+    # Pattern 2: Đếm "điều" trong "điều" - illogical
+    if "điều" in query_lower and any(word in query_lower for word in ["bao nhiêu điều", "mấy điều", "số lượng điều"]):
+        # Check if asking about articles WITHIN an article
+        import re
+        if re.search(r'(trong|ở|của)\s+điều\s+\d+', query_lower):
+            return {
+                "valid": False,
+                "error_message": "Câu hỏi không hợp lý: Một điều luật không thể chứa điều luật khác.",
+                "suggestion": "Bạn có thể hỏi: 'Điều X quy định gì?' hoặc 'Trong điều X có bao nhiêu khoản?'"
+            }
+
+    # Pattern 3: Đếm "mục" trong "điều" or "điều" trong "mục" - might be valid but unusual
+    # Let it pass for now, as it might be valid in some contexts
+
+    # All checks passed
+    return {
+        "valid": True,
+        "error_message": None,
+        "suggestion": None
+    }
+
+
+def count_articles_with_filter(structured_query, translator, vectorstore, original_query: str = "") -> dict:
+    """
+    ⚡ OPTIMIZED: Count unique articles OR sections using Qdrant count() + efficient scroll
+
+    Changes:
+    - Use Qdrant count() API first for fast sanity check
+    - Increased scroll limit (100 → 500) to reduce roundtrips
+    - Only fetch payload metadata (không cần full content)
+    - Smart detection: count "Muc" if query asks about "mục", otherwise count "Dieu_Number"
 
     Args:
         structured_query: The structured query object with filter
         translator: QdrantTranslator instance
         vectorstore: Qdrant vectorstore instance
+        original_query: Original user query to detect what to count (điều vs mục)
 
     Returns:
-        dict with 'count', 'articles' (list of Dieu_Numbers), and 'filter_description'
+        dict with 'count', 'articles' (list of Dieu_Numbers or Muc), and 'filter_description'
     """
     print(f"\n{'='*80}")
-    print(f"🔢 COUNTING ARTICLES WITH FILTER")
+    print(f"🔢 ⚡ OPTIMIZED COUNTING WITH FILTER")
     print(f"{'='*80}")
+
+    # 🎯 DETECT WHAT TO COUNT: "mục" or "điều"
+    count_muc = "mục" in original_query.lower() and "bao nhiêu mục" in original_query.lower()
+    count_field = "Muc" if count_muc else "Dieu_Number"
+    count_label = "mục" if count_muc else "điều luật"
+
+    print(f"   🎯 Counting: {count_label} (field: {count_field})")
 
     # Translate filter to Qdrant format
     if not structured_query.filter:
@@ -1168,62 +1130,130 @@ def count_articles_with_filter(structured_query, translator, vectorstore) -> dic
 
         print(f"   Using Qdrant filter: {qdrant_filter}")
 
-        # Use scroll to get ALL matching documents (not limited by k)
-        from qdrant_client.models import ScrollResult
-
         # Get the Qdrant client from vectorstore
         client = vectorstore.client
         collection_name = vectorstore.collection_name
 
-        # Scroll through all matching documents
-        all_points = []
+        # ⚡ STEP 1: Fast count check using Qdrant count() API
+        print(f"   ⚡ Step 1: Fast count check...")
+        try:
+            count_result = client.count(
+                collection_name=collection_name,
+                count_filter=qdrant_filter,
+                exact=True  # Get exact count
+            )
+            total_docs = count_result.count
+            print(f"   📊 Total documents matching filter: {total_docs}")
+
+            # Early exit if no results
+            if total_docs == 0:
+                print(f"   ✅ No documents found - early exit")
+                print(f"{'='*80}\n")
+                return {
+                    "count": 0,
+                    "articles": [],
+                    "filter_description": structured_query.query,
+                    "raw_filter": str(structured_query.filter)
+                }
+        except Exception as e:
+            print(f"   ⚠️ Count API failed: {e}, proceeding with scroll...")
+            total_docs = None
+
+        # ⚡ STEP 2: Scroll to get unique values (OPTIMIZED)
+        print(f"   ⚡ Step 2: Scrolling for unique {count_label} IDs...")
+
+        # OPTIMIZATION: Increased limit from 100 to 500 for fewer roundtrips
+        SCROLL_LIMIT = 500
+
+        unique_values = set()
+        value_titles = {}  # Store {number: title} mapping
+
         scroll_result = client.scroll(
             collection_name=collection_name,
             scroll_filter=qdrant_filter,
-            limit=100,  # Get 100 at a time
-            with_payload=True,
-            with_vectors=False
+            limit=SCROLL_LIMIT,
+            with_payload=True,  # Need metadata
+            with_vectors=False  # Don't need vectors (saves bandwidth)
         )
 
-        all_points.extend(scroll_result[0])
+        # Process first batch
+        for point in scroll_result[0]:
+            metadata = point.payload.get('metadata', {})
+            value = metadata.get(count_field)
+            if value is not None:
+                unique_values.add(value)
+                # Extract title for điều
+                if count_field == "Dieu_Number":
+                    # The 'Dieu' field contains full text like "Điều 4. Nội dung kế hoạch..."
+                    dieu_full = metadata.get('Dieu', '')
+                    if dieu_full and value not in value_titles:
+                        # Parse to extract title after "Điều {số}. "
+                        import re
+                        match = re.search(r'Điều\s+\d+\.\s*(.+)', dieu_full, re.IGNORECASE)
+                        if match:
+                            value_titles[value] = match.group(1).strip()
+                # Extract title for mục
+                elif count_field == "Muc":
+                    title = metadata.get('Muc_Title') or metadata.get('Title')
+                    if title and value not in value_titles:
+                        value_titles[value] = title
 
         # Continue scrolling if there's more
         next_page_offset = scroll_result[1]
+        batch_count = 1
+
         while next_page_offset:
             scroll_result = client.scroll(
                 collection_name=collection_name,
                 scroll_filter=qdrant_filter,
-                limit=100,
+                limit=SCROLL_LIMIT,
                 offset=next_page_offset,
                 with_payload=True,
                 with_vectors=False
             )
-            all_points.extend(scroll_result[0])
+
+            for point in scroll_result[0]:
+                metadata = point.payload.get('metadata', {})
+                value = metadata.get(count_field)
+                if value is not None:
+                    unique_values.add(value)
+                    # Extract title for điều
+                    if count_field == "Dieu_Number":
+                        # The 'Dieu' field contains full text like "Điều 4. Nội dung kế hoạch..."
+                        dieu_full = metadata.get('Dieu', '')
+                        if dieu_full and value not in value_titles:
+                            # Parse to extract title after "Điều {số}. "
+                            import re
+                            match = re.search(r'Điều\s+\d+\.\s*(.+)', dieu_full, re.IGNORECASE)
+                            if match:
+                                value_titles[value] = match.group(1).strip()
+                    # Extract title for mục
+                    elif count_field == "Muc":
+                        title = metadata.get('Muc_Title') or metadata.get('Title')
+                        if title and value not in value_titles:
+                            value_titles[value] = title
+
             next_page_offset = scroll_result[1]
+            batch_count += 1
 
-        print(f"   📊 Found {len(all_points)} total documents matching filter")
+        sorted_items = sorted(list(unique_values))
 
-        # Extract unique Dieu_Number values
-        dieu_numbers = set()
-        for point in all_points:
-            dieu_num = point.payload.get('metadata', {}).get('Dieu_Number')
-            if dieu_num is not None:
-                dieu_numbers.add(dieu_num)
-
-        sorted_articles = sorted(list(dieu_numbers))
-
-        print(f"   📌 Unique articles (Dieu_Number): {sorted_articles}")
-        print(f"   ✅ Total count: {len(sorted_articles)} điều luật")
+        print(f"   📌 Scrolled {batch_count} batches (limit={SCROLL_LIMIT})")
+        print(f"   📌 Unique {count_label} ({count_field}): {sorted_items}")
+        print(f"   📌 Collected titles for {len(value_titles)} items")
+        print(f"   ✅ Total count: {len(sorted_items)} {count_label}")
         print(f"{'='*80}\n")
 
         # Create filter description for natural language response
         filter_desc = structured_query.query
 
         return {
-            "count": len(sorted_articles),
-            "articles": sorted_articles,
+            "count": len(sorted_items),
+            "articles": sorted_items,  # Can be Dieu_Number or Muc values
+            "titles": value_titles,  # {number: title} mapping
             "filter_description": filter_desc,
-            "raw_filter": str(structured_query.filter)
+            "raw_filter": str(structured_query.filter),
+            "count_type": count_label  # "điều luật" or "mục"
         }
 
     except Exception as e:
@@ -1239,16 +1269,18 @@ def generate_counting_answer(count_result: dict, original_query: str) -> str:
     """
     count = count_result.get("count")
     articles = count_result.get("articles", [])
+    titles = count_result.get("titles", {})  # {number: title} mapping
     filter_desc = count_result.get("filter_description", "")
+    count_type = count_result.get("count_type", "điều luật")  # "điều luật" or "mục"
 
     if count is None:
-        return "Xin lỗi, tôi không thể đếm số lượng điều luật dựa trên câu hỏi của bạn."
+        return "Xin lỗi, tôi không thể đếm số lượng dựa trên câu hỏi của bạn."
 
     if count == 0:
-        return f"Không có điều luật nào trong phạm vi bạn yêu cầu ({filter_desc})."
+        return f"Không có {count_type} nào trong phạm vi bạn yêu cầu ({filter_desc})."
 
     # Create answer
-    answer = f"Có **{count} điều luật** trong phạm vi bạn yêu cầu"
+    answer = f"Có **{count} {count_type}** trong phạm vi bạn yêu cầu"
 
     # Add filter context if available
     if "mục" in original_query.lower() or "chương" in original_query.lower():
@@ -1256,33 +1288,65 @@ def generate_counting_answer(count_result: dict, original_query: str) -> str:
 
     answer += "."
 
-    # List the articles if count is reasonable (< 20)
+    # List the items if count is reasonable (< 20)
+    # Determine prefix based on count_type
+    if "mục" in count_type.lower():
+        prefix = "Mục"
+    else:
+        prefix = "Điều"
+
     if count > 0 and count <= 20:
-        articles_str = ", ".join([f"Điều {a}" for a in articles])
-        answer += f"\n\nCụ thể: {articles_str}."
+        # Format with titles if available
+        items_list = []
+        for a in articles:
+            if a in titles and titles[a]:
+                items_list.append(f"{prefix} {a}. {titles[a]}")
+            else:
+                items_list.append(f"{prefix} {a}")
+
+        # Use numbered list format for better readability
+        answer += "\n\nDanh sách chi tiết:\n"
+        for i, item in enumerate(items_list, 1):
+            answer += f"{i}. {item}\n"
     elif count > 20:
-        # Show first 10 and last 5
-        first_10 = ", ".join([f"Điều {a}" for a in articles[:10]])
-        last_5 = ", ".join([f"Điều {a}" for a in articles[-5:]])
-        answer += f"\n\nCụ thể: {first_10}, ... , {last_5}."
+        # Show first 10 and last 5 with titles
+        items_list_first = []
+        for a in articles[:10]:
+            if a in titles and titles[a]:
+                items_list_first.append(f"{prefix} {a}. {titles[a]}")
+            else:
+                items_list_first.append(f"{prefix} {a}")
+
+        items_list_last = []
+        for a in articles[-5:]:
+            if a in titles and titles[a]:
+                items_list_last.append(f"{prefix} {a}. {titles[a]}")
+            else:
+                items_list_last.append(f"{prefix} {a}")
+
+        answer += "\n\nDanh sách chi tiết (10 đầu + 5 cuối):\n"
+        for i, item in enumerate(items_list_first, 1):
+            answer += f"{i}. {item}\n"
+        answer += "...\n"
+        for i, item in enumerate(items_list_last, len(articles) - 4):
+            answer += f"{i}. {item}\n"
 
     return answer
 
 
-from langchain_core.pydantic_v1 import BaseModel, Field
-from langchain_core.prompts import ChatPromptTemplate
+# Import pydantic v1 for graders (aliased to avoid conflict)
+from langchain_core.pydantic_v1 import BaseModel as PydanticV1BaseModel, Field as PydanticV1Field
 
 # Data model
-class GradeDocuments(BaseModel):
+class GradeDocuments(PydanticV1BaseModel):
     """Đánh giá nhị phân về mức độ liên quan của tài liệu đã truy xuất."""
 
-    binary_score: str = Field(
+    binary_score: str = PydanticV1Field(
         description="Tài liệu có liên quan đến câu hỏi hay không, 'có' hoặc 'không'"
     )
 
-# LLM with function call
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-structured_llm_grader = llm.with_structured_output(GradeDocuments)
+# LLM with function call (using centralized LLM_SMART)
+structured_llm_grader = LLM_SMART.with_structured_output(GradeDocuments)
 
 # Enhanced Prompt
 system = """Bạn là bộ đánh giá mức độ liên quan của tài liệu được truy xuất đối với câu hỏi người dùng.
@@ -1369,43 +1433,81 @@ retrieval_grader = grade_prompt | structured_llm_grader
 
 
 
-def grade_documents(state):
+async def grade_documents_async(question: str, documents: List[Document]) -> List[Document]:
     """
-    Xác định xem các tài liệu đã truy xuất có liên quan đến câu hỏi hay không.
+    ⚡ PARALLEL document grading - Grade tất cả documents đồng thời
 
     Args:
-        state (dict): Trạng thái hiện tại của đồ thị
+        question: User's question
+        documents: List of documents to grade
 
     Returns:
-        state (dict): Cập nhật khóa documents chỉ với các tài liệu liên quan đã được lọc
+        List of relevant documents only
     """
+    if not documents:
+        return []
 
-    print("---CHECK DOCUMENT RELEVANCE TO QUESTION---")
-    question = state["question"]
-    documents = state["documents"]
+    print(f"---⚡ PARALLEL GRADING {len(documents)} DOCUMENTS---")
 
-    # Score each doc
-    filtered_docs = []
-    for d in documents:
+    async def grade_single_doc(doc: Document):
+        """Grade a single document"""
         # Combine metadata with content
         doc_txt_with_metadata = f"""
 Metadata:
-- Điều {d.metadata.get('Dieu', 'N/A')}: {d.metadata.get('Dieu_Name', '')}
-- Chương {d.metadata.get('Chuong', 'N/A')}: {d.metadata.get('Chuong_Name', '')}
-- Mục {d.metadata.get('Muc', 'N/A')}: {d.metadata.get('Muc_Name', '')}
+- Điều {doc.metadata.get('Dieu', 'N/A')}: {doc.metadata.get('Dieu_Name', '')}
+- Chương {doc.metadata.get('Chuong', 'N/A')}: {doc.metadata.get('Chuong_Name', '')}
+- Mục {doc.metadata.get('Muc', 'N/A')}: {doc.metadata.get('Muc_Name', '')}
 
 Nội dung:
-{d.page_content}
+{doc.page_content}
 """
+        try:
+            # Use ainvoke for async grading
+            score = await retrieval_grader.ainvoke({
+                "question": question,
+                "document": doc_txt_with_metadata
+            })
+            return (doc, score.binary_score)
+        except Exception as e:
+            print(f"  ⚠️ Error grading document: {e}")
+            return (doc, "không")
 
-        score = retrieval_grader.invoke({"question": question, "document": doc_txt_with_metadata})
-        grade = score.binary_score
+    # ⚡ Grade all documents in parallel
+    results = await asyncio.gather(*[grade_single_doc(d) for d in documents])
+
+    # Filter relevant documents
+    filtered_docs = []
+    for doc, grade in results:
         if grade == "có":
-            print("---GRADE: DOCUMENT RELEVANT---")
-            filtered_docs.append(d)
+            print("  ✓ RELEVANT")
+            filtered_docs.append(doc)
         else:
-            print("---GRADE: DOCUMENT NOT RELEVANT---")
-            continue
+            print("  ✗ NOT RELEVANT")
+
+    print(f"  → Kept {len(filtered_docs)}/{len(documents)} documents")
+    return filtered_docs
+
+
+def grade_documents(state):
+    """
+    Wrapper đồng bộ cho grade_documents_async
+    Giữ nguyên interface cũ để tương thích
+    """
+    question = state["question"]
+    documents = state["documents"]
+
+    # Run async function in event loop
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        # Nếu đang trong async context, tạo task mới
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            filtered_docs = pool.submit(
+                lambda: asyncio.run(grade_documents_async(question, documents))
+            ).result()
+    else:
+        # Nếu không trong async context, chạy trực tiếp
+        filtered_docs = asyncio.run(grade_documents_async(question, documents))
 
     return {"documents": filtered_docs, "question": question}
 
@@ -1417,60 +1519,15 @@ class LegalRouteQuery(BaseModel):
         description="vectorstore (văn bản pháp luật), chitchat (giao tiếp thân thiện)"
     )
 
-# ========== INITIALIZE LLM ROUTER ==========
-llm_router = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
-structured_llm_router = llm_router.with_structured_output(LegalRouteQuery)
-
-# ========== SYSTEM PROMPT ==========
-router_system = """Bạn là một chuyên gia phân loại câu hỏi người dùng tới nguồn dữ liệu phù hợp.
-
-Bạn có quyền truy cập 2 nguồn:
-1. **vectorstore** - Văn bản pháp luật Việt Nam (luật, nghị định, điều khoản)
-q. **chitchat** - Giao tiếp thân thiện, hỏi thăm, cảm ơn, chào hỏi
-
-## QUY TẮC ƯU TIÊN QUAN TRỌNG (kiểm tra theo thứ tự):
-
-### 1. Chuyển tới **chitchat** nếu:
-- Lời chào: "Xin chào", "Chào bạn", "Hi", "Good morning"
-- Giới thiệu: "Tôi tên là...", "Mình là..."
-- Cảm ơn: "Cảm ơn", "Thanks"
-- Tạm biệt: "Tạm biệt", "Bye", "Goodbye"
-- Hỏi thăm / nói chuyện thân thiện: "Bạn có khỏe không?", "Hôm nay thế nào?"
-- Các câu hỏi về trợ lý: "Bạn nhớ tôi không?", "Tên tôi là gì?"
-- **Lưu ý:** Nếu câu bắt đầu bằng lời chào, luôn là chitchat, ngay cả khi có nhắc đến luật.
-
-### 2. Chuyển tới **vectorstore** nếu không phải chitchat và:
-- Hỏi về luật / điều khoản cụ thể: "Điều kiện cấp giấy phép môi trường", "Quyền và nghĩa vụ của tổ chức sản xuất"
-- Tra cứu nội dung Điều / Mục / Chương
-- So sánh quy định: "So sánh Điều 5 và Điều 6 của Luật BVMT"
-- Phạm vi áp dụng: "Phạm vi áp dụng của Luật BVMT là gì?"
-- Yêu cầu tóm tắt hoặc giải thích văn bản pháp luật
-
-
-## Ví dụ:
-
-"Xin chào! Tôi muốn hỏi về luật môi trường" → **chitchat** (lời chào + câu hỏi)
-"Cảm ơn bạn đã giúp tôi!" → **chitchat**
-"Điều kiện cấp giấy phép môi trường là gì?" → **vectorstore**
-"Quyền và nghĩa vụ của doanh nghiệp về chất thải?" → **vectorstore**
-
-
-
-## Câu hỏi hiện tại:
-{question}
-
-Phân loại câu hỏi dựa trên quy tắc ưu tiên trên."""
-
-# ========== CREATE ROUTER PROMPT ==========
-route_prompt = ChatPromptTemplate.from_messages([
-    ("system", router_system),
-    ("human", "{question}")
-])
-
-# ========== COMBINE PROMPT WITH STRUCTURED LLM ==========
+# ============================================================================
+# LEGAL ROUTER: Phân loại câu hỏi → Legal Documents hoặc Chitchat
+# Prompt được load từ improved_prompts.py
+# ============================================================================
+# llm_router = LLM_FAST  # Using centralized LLM
+structured_llm_router = LLM_FAST.with_structured_output(LegalRouteQuery)
+route_prompt = create_legal_router_prompt()
 question_router = route_prompt | structured_llm_router
-
-print("✓ Legal question router created successfully!")
+print("✓ Legal router loaded from improved_prompts.py")
 
 def route_question_law(state):
     """Phân luồng câu hỏi với xử lý ngữ cảnh cải tiến"""
@@ -1524,7 +1581,8 @@ def retrieve(state):
             count_result = count_articles_with_filter(
                 structured_query,
                 translator,
-                vectorstore_fix
+                vectorstore_fix,
+                original_query=question  # Pass original query to detect what to count
             )
 
             # Generate counting answer
@@ -1579,21 +1637,18 @@ def retrieve(state):
 
 ### Generate
 
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
-
 # Custom detailed prompt for Vietnamese legal RAG
 prompt_template = """Bạn là trợ lý AI chuyên về pháp luật EPR (Extended Producer Responsibility - Trách nhiệm mở rộng của nhà sản xuất) tại Việt Nam.
 
 NHIỆM VỤ CỦA BẠN:
-1. Trả lời câu hỏi của người dùng dựa HOÀN TOÀN trên các văn bản pháp luật được cung cấp bên dưới
+1. Trả lời câu hỏi của người dùng dựa HOÀN TOÀN trên Văn bản hợp nhất số 01/VBHN-BTNMT (Luật Bảo vệ môi trường)
 2. Trích dẫn cụ thể số Điều, Chương, Mục khi trả lời
 3. Giải thích rõ ràng, dễ hiểu bằng tiếng Việt
-4. Nếu thông tin không có trong tài liệu, hãy nói rõ "Thông tin này không có trong tài liệu được cung cấp"
+4. Nếu thông tin không có trong văn bản, hãy nói rõ "Theo văn bản pháp luật hiện hành, vấn đề này chưa được quy định cụ thể"
 
 QUY TẮC TRẢ LỜI:
-- KHÔNG bịa đặt hoặc thêm thông tin không có trong tài liệu
-- KHÔNG suy diễn ra ngoài phạm vi của tài liệu
+- KHÔNG bịa đặt hoặc thêm thông tin không có trong văn bản pháp luật
+- KHÔNG suy diễn ra ngoài phạm vi của văn bản
 - Luôn trích dẫn nguồn (Điều, Chương, Mục) khi có thể
 - KHÔNG sử dụng cụm từ "Tài liệu 1", "Tài liệu 2" - CHỈ dùng "Điều X", "Chương Y", "Mục Z"
 - Sử dụng ngôn ngữ pháp lý chính xác nhưng dễ hiểu
@@ -1609,13 +1664,13 @@ Nếu có nhiều điều liên quan:
 
 ĐẶC BIỆT CHÚ Ý:
 - Nếu câu hỏi dạng "Điều X có nói về Y không?":
-  * Nếu tài liệu có Điều X nhưng KHÔNG đề cập Y → Trả lời rõ ràng: "KHÔNG, Điều X không đề cập đến Y. Điều X quy định về..."
-  * Nếu tài liệu có Điều X và CÓ đề cập Y → Trả lời: "CÓ, Điều X có quy định về Y. Cụ thể..."
-  * KHÔNG nói "không tìm thấy trong cơ sở dữ liệu" nếu đã có tài liệu về Điều X
+  * Nếu văn bản có Điều X nhưng KHÔNG đề cập Y → Trả lời rõ ràng: "KHÔNG, Điều X không đề cập đến Y. Điều X quy định về..."
+  * Nếu văn bản có Điều X và CÓ đề cập Y → Trả lời: "CÓ, Điều X có quy định về Y. Cụ thể..."
+  * KHÔNG nói "không tìm thấy trong cơ sở dữ liệu" nếu đã có thông tin về Điều X
 
 VÍ DỤ:
 Câu hỏi: "Điều 7 có nói về lốp xe không?"
-Tài liệu: [Điều 7: Quy định về quản lý chất lượng không khí...]
+Văn bản: [Điều 7: Quy định về quản lý chất lượng không khí...]
 ✅ Đúng: "KHÔNG, Điều 7 không đề cập đến lốp xe. Điều 7 quy định về quản lý chất lượng môi trường không khí..."
 ❌ Sai: "Không tìm thấy thông tin trong cơ sở dữ liệu"
 
@@ -1624,7 +1679,8 @@ Câu hỏi: "Điều 7 quy định gì?"
 ❌ SAI: "KHÔNG, Điều 7 không nói về lốp xe..." (Đây là trả lời câu hỏi khác!)
 
 ===============================================
-TÀI LIỆU PHÁP LUẬT THAM KHẢO:
+VĂN BẢN PHÁP LUẬT:
+(Căn cứ: Văn bản hợp nhất số 01/VBHN-BTNMT - Luật Bảo vệ môi trường)
 
 {context}
 
@@ -1637,7 +1693,7 @@ TRẢ LỜI:"""
 prompt = ChatPromptTemplate.from_template(prompt_template)
 
 # LLM
-llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
+llm = LLM_SMART  # Using centralized LLM
 
 
 def format_docs(docs, max_docs: int = 5, max_tokens_per_doc: int = 800):
@@ -1653,7 +1709,7 @@ def format_docs(docs, max_docs: int = 5, max_tokens_per_doc: int = 800):
         Formatted string with document content
     """
     if not docs:
-        return "Không có tài liệu liên quan."
+        return "Không có thông tin liên quan trong văn bản pháp luật."
 
     # Limit number of documents
     docs_to_use = docs[:max_docs]
@@ -1675,7 +1731,7 @@ def format_docs(docs, max_docs: int = 5, max_tokens_per_doc: int = 800):
         if citation_parts:
             citation = ", ".join(citation_parts)
         else:
-            citation = f"Tài liệu {i}"
+            citation = f"Văn bản số {i}"
 
         # Truncate document content to fit token limit
         content = truncate_text(doc.page_content, max_tokens=max_tokens_per_doc)
@@ -1720,7 +1776,7 @@ def generate(state):
     # ✅ NORMAL GENERATION FOR NON-COUNTING QUERIES
     if not documents:
         print("   ⚠️ No documents available")
-        generation = "Xin lỗi, tôi không tìm thấy thông tin liên quan trong cơ sở dữ liệu."
+        generation = "Xin lỗi, tôi không tìm thấy thông tin liên quan trong Văn bản hợp nhất số 01/VBHN-BTNMT. Vui lòng thử đặt câu hỏi khác hoặc liên hệ với chuyên gia pháp lý để được tư vấn chi tiết."
     else:
         # Format documents with metadata
         context = format_docs(documents)
@@ -1777,7 +1833,6 @@ def decide_to_generate(state):
 ### Web Search - Return Links Only
 
 from langchain_community.tools.tavily_search import TavilySearchResults
-import os
 
 # Initialize web search tool with error handling
 try:
@@ -1916,20 +1971,16 @@ def generate_web(state):
 
 ### Hallucination Grader - Kiểm tra ảo giác
 
-from langchain_core.pydantic_v1 import BaseModel, Field
-from langchain_core.prompts import ChatPromptTemplate
-
 # Data model
-class GradeHallucinations(BaseModel):
+class GradeHallucinations(PydanticV1BaseModel):
     """Đánh giá nhị phân xem câu trả lời có dựa trên tài liệu hay không."""
 
-    binary_score: str = Field(
+    binary_score: str = PydanticV1Field(
         description="Câu trả lời có dựa trên tài liệu không, 'có' hoặc 'không'"
     )
 
-# LLM with function call
-llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
-structured_llm_grader = llm.with_structured_output(GradeHallucinations)
+# LLM with function call (using centralized LLM_FAST)
+structured_llm_grader = LLM_FAST.with_structured_output(GradeHallucinations)
 
 # Prompt
 system = """Bạn là chuyên gia đánh giá chất lượng câu trả lời AI trong lĩnh vực pháp luật EPR Việt Nam.
@@ -1974,20 +2025,16 @@ print("✅ Hallucination grader đã được tạo thành công!")
 
 ### Answer Grader - Đánh giá câu trả lời có giải quyết câu hỏi không
 
-from langchain_core.pydantic_v1 import BaseModel, Field
-from langchain_core.prompts import ChatPromptTemplate
-
 # Data model
-class GradeAnswer(BaseModel):
+class GradeAnswer(PydanticV1BaseModel):
     """Đánh giá nhị phân xem câu trả lời có giải quyết được câu hỏi hay không."""
 
-    binary_score: str = Field(
+    binary_score: str = PydanticV1Field(
         description="Câu trả lời có giải quyết câu hỏi không, 'có' hoặc 'không'"
     )
 
-# LLM with function call
-llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
-structured_llm_grader = llm.with_structured_output(GradeAnswer)
+# LLM with function call (using centralized LLM_FAST)
+structured_llm_grader = LLM_FAST.with_structured_output(GradeAnswer)
 
 # Prompt
 system = """Bạn là bộ đánh giá xem câu trả lời của AI có giải quyết/trả lời được câu hỏi của người dùng hay không.
@@ -2144,26 +2191,6 @@ def decide_after_grade_generation(state):
         print(f"  → Unknown value, defaulting to 'useful'")
         return "useful"
 
-from langgraph.graph import END, StateGraph
-from typing import TypedDict, List
-
-class GraphState(TypedDict):
-    question: str
-    generation: str
-    documents: List[str]
-    
-    original_question: str
-    chat_history: str
-    retries: int
-    generation_retries: int
-    grade_result: str 
-    hallucination_detected: bool 
-    web_urls: str
-
-# ========== STATEGRAPH WORKFLOW REMOVED ==========
-# Old StateGraph workflow removed (not used - replaced by optimized_chatbot_pipeline)
-
-
 
 def get_full_chat_history(max_exchanges=3):
     """
@@ -2221,7 +2248,6 @@ print("✅ EPR Chatbot Core Module Loaded Successfully!")
 # ============================================================================
 
 import asyncio
-from typing import AsyncIterator, Dict, Any
 
 print("\n" + "="*80)
 print("🚀 Loading Performance Optimizations...")
@@ -2257,6 +2283,9 @@ async def retrieve_legal_async(question: str):
     if is_counting_question(question):
         print("  🔢 [ASYNC] Detected COUNTING question")
 
+        # Note: Query clarity validation is now done at pipeline level before retrieval
+        # No need to validate here anymore
+
         def _count_sync():
             try:
                 # Parse the query to extract filters
@@ -2267,7 +2296,8 @@ async def retrieve_legal_async(question: str):
                 count_result = count_articles_with_filter(
                     structured_query,
                     translator,
-                    vectorstore_fix
+                    vectorstore_fix,
+                    original_query=question  # Pass original query to detect what to count
                 )
 
                 # Generate counting answer
@@ -2300,13 +2330,10 @@ async def retrieve_legal_async(question: str):
 
     # ✅ NORMAL RETRIEVAL FOR NON-COUNTING QUESTIONS
     try:
-        documents = await loop.run_in_executor(
-            None,
-            fallback_retriever.invoke,
-            question
-        )
+        # Use ainvoke() instead of invoke() for async compatibility
+        documents = await fallback_retriever.ainvoke(question)
     except Exception as e:
-        print(f"  ⚠️ [ASYNC] Error: {e}, falling back to similarity search")
+        print(f"  ⚠️ [ASYNC] Error: {e}, falling back to semantic search without filter")
         documents = await loop.run_in_executor(
             None,
             vectorstore_fix.similarity_search,
@@ -2535,6 +2562,121 @@ async def _generate_legal_answer(
             yield chunk.content
 
 
+# ========== HELPER: DETECT AMBIGUOUS SECTION QUERIES ==========
+
+def detect_ambiguous_section_query(query: str, documents: list) -> dict:
+    """
+    Detect if query asks about section membership (e.g., "mục 2 thuộc chương nào?")
+    and check if there are multiple results
+
+    Args:
+        query: User's question
+        documents: Retrieved documents from RAG
+
+    Returns:
+        dict with:
+            - is_ambiguous: bool - whether query is ambiguous (multiple results)
+            - clarification: str - question to ask user (if ambiguous)
+            - chapters: list - unique chapters found
+    """
+    import re
+
+    # Pattern 1: "mục X thuộc chương nào?" or "mục X trong chương nào?"
+    section_pattern = r'(mục|Mục)\s+(\d+)\s+(thuộc|trong|của)\s+(chương|Chương)\s+(nào|gì)'
+
+    # Pattern 2: "điều X thuộc mục nào?" or "điều X trong mục nào?"
+    article_pattern = r'(điều|Điều)\s+(\d+)\s+(thuộc|trong|của)\s+(mục|Mục|chương|Chương)\s+(nào|gì)'
+
+    # Pattern 3: Counting queries - "trong mục X có bao nhiêu điều"
+    counting_pattern_muc = r'(trong|ở)\s+(mục|Mục)\s+(\d+)\s+có\s+bao\s+nhiêu\s+(điều|Điều)'
+
+    # Pattern 4: Counting queries - "mục X có bao nhiêu điều" (without "trong")
+    counting_pattern_muc_short = r'(mục|Mục)\s+(\d+)\s+có\s+bao\s+nhiêu\s+(điều|Điều)'
+
+    section_match = re.search(section_pattern, query, re.IGNORECASE)
+    article_match = re.search(article_pattern, query, re.IGNORECASE)
+    counting_muc_match = re.search(counting_pattern_muc, query, re.IGNORECASE)
+    counting_muc_short_match = re.search(counting_pattern_muc_short, query, re.IGNORECASE)
+
+    # Get section number from any matching pattern
+    section_num = None
+    is_counting_query = False
+
+    if section_match:
+        section_num = section_match.group(2)
+    elif article_match:
+        pass  # Will be handled below
+    elif counting_muc_match:
+        section_num = counting_muc_match.group(3)
+        is_counting_query = True
+    elif counting_muc_short_match:
+        section_num = counting_muc_short_match.group(2)
+        is_counting_query = True
+    else:
+        # Query không match bất kỳ pattern nào
+        return {"is_ambiguous": False, "clarification": None, "chapters": []}
+
+    if not documents:
+        return {"is_ambiguous": False, "clarification": None, "chapters": []}
+
+    # Extract unique chapters from documents
+    unique_chapters = set()
+
+    for doc in documents:
+        # Get chapter from metadata
+        metadata = doc.metadata if hasattr(doc, 'metadata') else {}
+
+        # Try different metadata fields
+        chapter = None
+        if 'chapter' in metadata:
+            chapter = metadata['chapter']
+        elif 'Chương' in metadata:
+            chapter = metadata['Chương']
+        elif 'source' in metadata:
+            # Try to extract from source string
+            source = metadata['source']
+            chapter_match = re.search(r'Chương\s+([^\s]+)', source)
+            if chapter_match:
+                chapter = f"Chương {chapter_match.group(1)}"
+
+        if chapter:
+            unique_chapters.add(str(chapter))
+
+    if len(unique_chapters) <= 1:
+        # Only 1 or 0 chapters - not ambiguous
+        return {"is_ambiguous": False, "clarification": None, "chapters": list(unique_chapters)}
+
+    # Multiple chapters found - ambiguous!
+    chapters_list = sorted(list(unique_chapters))
+    chapters_str = ", ".join(chapters_list)
+
+    # Generate clarification based on query type
+    if is_counting_query and section_num:
+        # Counting query about a section (mục)
+        clarification = f"Tôi tìm thấy Mục {section_num} trong các chương sau: {chapters_str}. Bạn muốn hỏi về Mục {section_num} trong chương nào?"
+    elif section_match:
+        # "mục X thuộc chương nào?"
+        section_num = section_match.group(2)
+        clarification = f"Tôi tìm thấy Mục {section_num} trong các chương sau: {chapters_str}. Bạn muốn hỏi về Mục {section_num} trong chương nào?"
+    elif article_match:
+        # "điều X thuộc Y nào?"
+        article_num = article_match.group(2)
+        parent_type = article_match.group(4).lower()
+        if 'mục' in parent_type:
+            clarification = f"Tôi tìm thấy Điều {article_num} trong nhiều mục khác nhau. Bạn có thể cung cấp thêm thông tin về mục hoặc chương bạn đang quan tâm không?"
+        else:  # chương
+            clarification = f"Tôi tìm thấy Điều {article_num} trong các chương sau: {chapters_str}. Bạn muốn hỏi về Điều {article_num} trong chương nào?"
+    else:
+        # Fallback
+        clarification = f"Tôi tìm thấy kết quả trong các chương sau: {chapters_str}. Bạn muốn hỏi về chương nào?"
+
+    return {
+        "is_ambiguous": True,
+        "clarification": clarification,
+        "chapters": chapters_list
+    }
+
+
 # ========== OPTIMIZED CHATBOT PIPELINE ==========
 
 async def optimized_chatbot_pipeline(
@@ -2559,6 +2701,57 @@ async def optimized_chatbot_pipeline(
     print("\n" + "🔹"*40)
     print("🚀 OPTIMIZED PIPELINE START")
     print("🔹"*40)
+
+    # Step 0: Analyze query clarity BEFORE any processing
+    clarity_result = analyze_query_clarity(query, chat_history)
+
+    # If clarity analysis suggests a transformed query (e.g., user confirmed suggestion), use it
+    if clarity_result.get("transformed_query"):
+        original_query_before_transform = query
+        query = clarity_result["transformed_query"]
+        print(f"🔄 Query transformed:")
+        print(f"   Original: {original_query_before_transform}")
+        print(f"   Transformed: {query}")
+
+    if not clarity_result.get("is_clear", True):
+        # Query is ambiguous or illogical - ask for clarification
+        issue_type = clarity_result.get("issue_type", "unknown")
+        clarifying_question = clarity_result.get("clarifying_question", "")
+
+        print(f"⚠️ Query needs clarification: {issue_type}")
+        print(f"   Clarifying question: {clarifying_question}")
+
+        # TODO: TECHNICAL DEBT - Option B (Quick Fix)
+        # Currently returning clarification as normal text response for simplicity.
+        # FUTURE: Should use 'clarification_needed' type with interactive UI (Option A).
+        # This allows frontend to show clickable suggestion buttons.
+        # Tracked in: Frontend team backlog
+
+        # Return clarifying question as normal text (no icons, no suggestions)
+        # Just a natural conversation asking user to clarify
+        clarification_text = clarifying_question
+
+        # Return as normal response
+        yield {
+            'type': 'response_chunk',
+            'chunk': clarification_text,
+            'stage': 'streaming'
+        }
+
+        yield {
+            'type': 'response_complete',
+            'response': clarification_text,
+            'text': clarification_text,
+            'documents': [],
+            'source': 'clarification',
+            'stage': 'complete'
+        }
+
+        # Stop pipeline - wait for user to rephrase
+        print("🔹"*40)
+        print("⏸️ PIPELINE PAUSED - CLARIFICATION SENT AS TEXT")
+        print("🔹"*40 + "\n")
+        return
 
     # Step 0a: Rewrite question based on chat history (if needed)
     original_query = query
@@ -2655,6 +2848,36 @@ async def optimized_chatbot_pipeline(
         if not faq_docs:
             legal_docs = await retrieve_legal_async(query)
 
+    # Step 2.5: Check for ambiguous section queries (e.g., "mục 2 thuộc chương nào?")
+    if legal_docs:
+        ambiguity_result = detect_ambiguous_section_query(original_query, legal_docs)
+        if ambiguity_result["is_ambiguous"]:
+            clarification_text = ambiguity_result["clarification"]
+            print(f"⚠️ Ambiguous section query detected")
+            print(f"   Found in chapters: {ambiguity_result['chapters']}")
+            print(f"   Clarification: {clarification_text}")
+
+            # Return clarification to user
+            yield {
+                'type': 'response_chunk',
+                'chunk': clarification_text,
+                'stage': 'streaming'
+            }
+
+            yield {
+                'type': 'response_complete',
+                'response': clarification_text,
+                'text': clarification_text,
+                'documents': [],
+                'source': 'clarification_ambiguous',
+                'stage': 'complete'
+            }
+
+            print("🔹"*40)
+            print("⏸️ PIPELINE PAUSED - AMBIGUOUS SECTION QUERY")
+            print("🔹"*40 + "\n")
+            return
+
     # Step 3: Determine which documents to use
     documents_to_use = []
     source_type = None
@@ -2723,23 +2946,67 @@ async def optimized_chatbot_pipeline(
     # Step 4: Stream the response
     full_response = ""
 
-    async for chunk in generate_answer_streaming(
-        query,
-        documents_to_use,
-        source_type,
-        chat_history=chat_history
-    ):
-        full_response += chunk
-        yield {
-            'type': 'response_chunk',
-            'chunk': chunk,
-            'stage': 'streaming'
-        }
+    # 🔢 CHECK IF THIS IS A COUNTING RESULT - Pass through LLM for proper formatting
+    if documents_to_use and documents_to_use[0].metadata.get('type') == 'counting_result':
+        print("   🔢 Counting result detected - formatting through LLM...")
+        counting_data = documents_to_use[0].page_content
+        print(f"   📝 Counting data ({len(counting_data)} chars): {counting_data[:200]}...")
+
+        # Create a special prompt for formatting counting results
+        from improved_prompts import LEGAL_SYSTEM_PROMPT
+        counting_prompt_template = f"""{LEGAL_SYSTEM_PROMPT}
+
+NHIỆM VỤ ĐẶC BIỆT: Định dạng kết quả đếm số lượng
+
+Dữ liệu đếm đã được tính toán:
+{{counting_data}}
+
+Hãy trình bày kết quả này theo định dạng chuyên nghiệp:
+1. Nêu rõ số lượng tìm được
+2. Liệt kê chi tiết các mục (nếu có)
+3. Thêm trích dẫn: "Căn cứ: Văn bản hợp nhất số 01/VBHN-BTNMT - Luật Bảo vệ môi trường"
+
+Câu hỏi của người dùng: {{query}}
+"""
+
+        # Generate formatted response through LLM with streaming
+        from langchain_core.prompts import ChatPromptTemplate
+        from langchain_core.output_parsers import StrOutputParser
+
+        counting_prompt = ChatPromptTemplate.from_template(counting_prompt_template)
+        counting_chain = counting_prompt | LLM_SMART | StrOutputParser()
+
+        async for chunk in counting_chain.astream({
+            "counting_data": counting_data,
+            "query": query
+        }):
+            full_response += chunk
+            yield {
+                'type': 'response_chunk',
+                'chunk': chunk,
+                'stage': 'streaming'
+            }
+    else:
+        # Normal LLM generation for non-counting queries
+        async for chunk in generate_answer_streaming(
+            query,
+            documents_to_use,
+            source_type,
+            chat_history=chat_history
+        ):
+            full_response += chunk
+            yield {
+                'type': 'response_chunk',
+                'chunk': chunk,
+                'stage': 'streaming'
+            }
 
     # Step 5: Final metadata
+    print(f"   📊 Final response ({len(full_response)} chars): {full_response[:200]}...")
     yield {
         'type': 'response_complete',
-        'text': full_response,
+        'response': full_response,  # Changed from 'text' to 'response' to match server expectation
+        'text': full_response,  # Keep 'text' for backwards compatibility
         'documents': documents_to_use,
         'source': source_type,
         'stage': 'complete'

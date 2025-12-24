@@ -1,102 +1,47 @@
 # ============================================
-# EPR SaaS - Next.js Frontend Dockerfile
-# Multi-stage build for optimized production image
+# Build Stage
 # ============================================
-
-# Stage 1: Dependencies
-FROM node:20-alpine AS deps
-WORKDIR /app
-
-# Install dependencies based on the preferred package manager
-COPY package.json pnpm-lock.yaml* ./
-RUN corepack enable pnpm && pnpm install --frozen-lockfile
-
-# Stage 2: Builder
 FROM node:20-alpine AS builder
+
 WORKDIR /app
 
-# Build arguments for Next.js public env vars (embedded at build time)
-ARG NEXT_PUBLIC_BROWSER_API_URL
-ARG NEXT_PUBLIC_BROWSER_CHATBOT_URL
-ARG NEXT_PUBLIC_APP_URL
+# Copy package files
+COPY package*.json ./
 
-# ============================================
-# VALIDATION: Fail build if required args are missing
-# ============================================
-RUN if [ -z "$NEXT_PUBLIC_BROWSER_API_URL" ]; then \
-      echo "❌ ERROR: NEXT_PUBLIC_BROWSER_API_URL build arg is required but not provided"; \
-      exit 1; \
-    fi && \
-    if [ -z "$NEXT_PUBLIC_BROWSER_CHATBOT_URL" ]; then \
-      echo "❌ ERROR: NEXT_PUBLIC_BROWSER_CHATBOT_URL build arg is required but not provided"; \
-      exit 1; \
-    fi && \
-    if [ -z "$NEXT_PUBLIC_APP_URL" ]; then \
-      echo "❌ ERROR: NEXT_PUBLIC_APP_URL build arg is required but not provided"; \
-      exit 1; \
-    fi
+# Install dependencies
+RUN npm ci --only=production=false
 
-# ============================================
-# LOGGING: Print build args for debugging
-# ============================================
-RUN echo "========================================" && \
-    echo "🔧 Build Configuration:" && \
-    echo "  API_URL: $NEXT_PUBLIC_BROWSER_API_URL" && \
-    echo "  CHATBOT_URL: $NEXT_PUBLIC_BROWSER_CHATBOT_URL" && \
-    echo "  APP_URL: $NEXT_PUBLIC_APP_URL" && \
-    echo "========================================"
-
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
+# Copy source code
 COPY . .
 
-# ============================================
-# SECURITY: Remove any .env files that could override build args
-# ============================================
-RUN rm -f .env.local .env*.local .env 2>/dev/null || true && \
-    echo "✓ Removed any existing .env files"
+# Build arguments for environment variables
+ARG VITE_API_BASE_URL
+ARG VITE_CHATBOT_API_URL
 
-# Build the application with public env vars
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV NEXT_PUBLIC_BROWSER_API_URL=$NEXT_PUBLIC_BROWSER_API_URL
-ENV NEXT_PUBLIC_BROWSER_CHATBOT_URL=$NEXT_PUBLIC_BROWSER_CHATBOT_URL
-ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+# Set environment variables for build
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+ENV VITE_CHATBOT_API_URL=${VITE_CHATBOT_API_URL}
 
-RUN corepack enable pnpm && pnpm run build
+# Build the application
+RUN npm run build
 
 # ============================================
-# POST-BUILD VALIDATION: Verify build output
+# Production Stage
 # ============================================
-RUN echo "========================================" && \
-    echo "✅ Build completed successfully" && \
-    echo "📦 Verifying standalone output..." && \
-    ls -lh .next/standalone/ && \
-    echo "========================================"
+FROM nginx:alpine
 
-# Stage 3: Runner (Production)
-FROM node:20-alpine AS runner
-WORKDIR /app
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
+# Copy built files from builder stage
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-# Copy necessary files
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-
-# Set correct permissions
-RUN chown -R nextjs:nodejs /app
-
-USER nextjs
-
+# Expose port 3000 (to match docker-compose config)
 EXPOSE 3000
 
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost:3000/ || exit 1
 
-CMD ["node", "server.js"]
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]

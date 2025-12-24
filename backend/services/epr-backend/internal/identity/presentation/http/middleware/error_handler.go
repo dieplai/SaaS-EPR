@@ -4,8 +4,10 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/epr-legal/epr-backend/internal/shared/domain"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -42,75 +44,26 @@ func ErrorHandler() gin.HandlerFunc {
 	}
 }
 
+// CORS returns a gin middleware with proper CORS configuration
 func CORS() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Get allowed origins from environment variable
-		// Default: localhost:3000, localhost:3001, localhost:8080
-		allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
-		if allowedOrigins == "" {
-			allowedOrigins = "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:8080"
-		}
-
-		// Get the origin from the request
-		origin := c.Request.Header.Get("Origin")
-
-		// For HTTP-only cookie support, we need to set a specific origin (not wildcard)
-		// Check if the request origin is in our allowed list
-		if origin != "" && isOriginAllowed(origin, allowedOrigins) {
-			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		}
-
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-
-		c.Next()
+	// Get allowed origins from environment variable
+	// Default: localhost:3000, localhost:3001, localhost:8080
+	allowedOriginsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if allowedOriginsEnv == "" {
+		allowedOriginsEnv = "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:8080"
 	}
-}
 
-func isOriginAllowed(origin string, allowedOrigins string) bool {
-	allowed := false
-	if allowedOrigins == "*" {
-		allowed = true
-	} else {
-		// Parse comma-separated list of allowed origins
-		// Format: "http://localhost:3000,http://localhost:3001"
-		originList := parseAllowedOrigins(allowedOrigins)
-		for _, o := range originList {
-			if origin == o {
-				allowed = true
-				break
-			}
-		}
+	// Parse comma-separated origins
+	allowedOrigins := strings.Split(allowedOriginsEnv, ",")
+	for i, origin := range allowedOrigins {
+		allowedOrigins[i] = strings.TrimSpace(origin)
 	}
-	return allowed
-}
 
-func parseAllowedOrigins(origins string) []string {
-	var result []string
-	for i := 0; i < len(origins); i++ {
-		var origin string
-		j := i
-		for j < len(origins) && origins[j] != ',' {
-			j++
-		}
-		origin = origins[i:j]
-		// Trim whitespace
-		for len(origin) > 0 && origin[0] == ' ' {
-			origin = origin[1:]
-		}
-		for len(origin) > 0 && origin[len(origin)-1] == ' ' {
-			origin = origin[:len(origin)-1]
-		}
-		if origin != "" {
-			result = append(result, origin)
-		}
-		i = j
-	}
-	return result
+	config := cors.DefaultConfig()
+	config.AllowOrigins = allowedOrigins
+	config.AllowCredentials = true
+	config.AllowHeaders = append(config.AllowHeaders, "Authorization")
+	config.MaxAge = 12 * 3600 // 12 hours
+
+	return cors.New(config)
 }

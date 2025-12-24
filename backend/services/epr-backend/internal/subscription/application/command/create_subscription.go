@@ -46,15 +46,29 @@ func (h *CreateSubscriptionHandler) Handle(ctx context.Context, cmd CreateSubscr
 		return uuid.Nil, err
 	}
 
-	if !pkg.IsActive() {
+	// Only check IsActive for paid packages (Free package is always allowed)
+	isFreePackage := pkg.GetPrice().Amount() == 0
+	if !isFreePackage && !pkg.IsActive() {
 		return uuid.Nil, ErrPackageNotActive
+	}
+
+	// For free packages, use token limit from system settings
+	tokenLimit := pkg.GetTokenLimit().Value()
+	if isFreePackage {
+		freeAccountSetting, err := h.settingsRepo.FindByKey(ctx, "free_account_token_limit")
+		if err == nil {
+			settingTokenLimit, err := freeAccountSetting.GetIntValue()
+			if err == nil {
+				tokenLimit = settingTokenLimit
+			}
+		}
 	}
 
 	sub, err := subscription.NewSubscription(
 		cmd.UserID,
 		cmd.PackageID,
 		pkg.GetDuration().Days(),
-		pkg.GetTokenLimit().Value(),
+		tokenLimit,
 	)
 	if err != nil {
 		return uuid.Nil, err

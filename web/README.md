@@ -1,178 +1,203 @@
-# EPR SaaS Platform - Frontend
+# EPR Frontend - React + Vite
 
-Nền tảng SaaS toàn diện cho quản lý trách nhiệm mở rộng của nhà sản xuất (EPR) với thiết kế thân thiện với môi trường.
+Modern React application built with Vite, TypeScript, and Tailwind CSS for EPR Legal SaaS Platform.
 
-## Tính năng
+## 🚀 Quick Start
 
-### Trang đã triển khai
-
-- ✅ **Trang chủ (/)** - Hero section, features, benefits, testimonials
-- ✅ **Giới thiệu (/about)** - Mission, vision, values, team
-- ✅ **Tin tức (/news)** - News listing, categories, newsletter
-- ✅ **Bảng giá (/pricing)** - 3 gói dịch vụ (Cơ bản, Chuyên nghiệp, Doanh nghiệp)
-- ✅ **Liên hệ (/contact)** - Contact form, company info
-- ✅ **Đăng nhập (/login)** - Login form with OAuth options
-- ✅ **Đăng ký (/register)** - Registration form with OAuth options
-- ✅ **Đăng xuất (/logout)** - Logout confirmation
-- ✅ **Chat AI (/chat)** - ChatGPT-like interface with sidebar history
-- ✅ **Quản lý tài khoản (/account)** - User profile, company info, subscription, security
-- ✅ **Admin Dashboard (/admin)** - Analytics, user management, subscription management
-
-### Thiết kế
-
-#### Màu sắc
-- **Eco-friendly Green Palette**: Forest green, sage, mint với white/off-white
-- **Dark Mode Support**: Deep forest night theme
-- **Gradients**: Subtle eco gradients (không lạm dụng)
-
-#### Typography
-- **Display Font**: Plus Jakarta Sans (Vietnamese support)
-- **Body Font**: Inter (Vietnamese support)
-
-#### Đặc điểm thiết kế
-- ✅ Modern, clean, professional
-- ✅ Eco-friendly branding với green/white color scheme
-- ✅ Organic blob shapes và nature-inspired elements
-- ✅ Smooth animations và micro-interactions
-- ✅ Responsive design (mobile, tablet, desktop)
-- ✅ SEO optimized
-- ✅ Accessibility compliant
-
-### Component Library
-- **shadcn/ui** - Modern UI components
-- **Lucide React** - Icon library
-- **Tailwind CSS v4** - Utility-first CSS
-
-## Tech Stack
-
-- **Framework**: Next.js 16 (App Router)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS v4
-- **UI Components**: shadcn/ui
-- **Icons**: Lucide React
-- **Animations**: Custom CSS animations + tw-animate-css
-
-## Cài đặt
-
+### Development
 ```bash
-# Cài đặt dependencies
-pnpm install
-
-# Chạy development server
-pnpm dev
-
-# Build production
-pnpm build
-
-# Chạy production server
-pnpm start
+npm install          # Install dependencies
+npm run dev          # Start dev server on port 8080
+npm run dev:staging  # Start dev server with staging config (port 3001)
 ```
 
-## Cấu trúc thư mục
+### Production Build
+```bash
+npm run build              # Production build
+npm run build:staging      # Staging build
+npm run preview            # Preview production build
+```
+
+## 🔧 Environment Configuration
+
+### Port Configuration
+
+The application uses **environment-based port configuration**:
+
+| Environment | Port | Command |
+|------------|------|---------|
+| Development | 8080 | `npm run dev` |
+| Staging | 3001 | `npm run dev:staging` |
+| Production | 3000 | `npm run build` |
+
+### Environment Files
+
+- `.env.development` - Development environment
+- `.env.staging` - Staging environment
+- `.env.production` - Production environment
+- `.env` - Local overrides (not committed)
+
+### Available Environment Variables
+
+```bash
+# Server Configuration
+VITE_PORT=8080                          # Server port
+
+# API Endpoints
+VITE_API_BASE_URL=http://localhost:8001       # Backend API
+VITE_CHATBOT_API_URL=http://localhost:8000    # Chatbot API
+
+# Feature Flags
+VITE_ENABLE_ANALYTICS=false             # Enable analytics
+VITE_ENABLE_DEBUG=true                  # Enable debug mode
+```
+
+## 🐳 Docker
+
+### Development
+```bash
+docker compose up web-frontend
+# Access at http://localhost:3001
+```
+
+### Production
+```bash
+docker compose -f docker-compose.base.yml -f docker-compose.production.yml up web-frontend
+# Access at http://localhost:3100
+```
+
+## 🔌 API Integration
+
+### Backend Services
+
+The frontend connects to two backend services:
+
+1. **EPR Backend** (Port 8001)
+   - Authentication: `/api/v1/auth/*`
+   - User Management: `/api/v1/users/*`
+   - Subscriptions: `/api/v1/subscriptions/*`
+   - Packages: `/api/v1/packages/*`
+
+2. **Chatbot Service** (Port 8000)
+   - Chat: `/api/v1/chat`
+   - Conversations: `/api/v1/conversations/*`
+
+### API Hooks
+
+```typescript
+import { useAuth } from '@/hooks/useAuth';
+import { usePackages } from '@/hooks/usePackages';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useChatbot } from '@/hooks/useChatbot';
+
+// Usage
+const { user, login, logout } = useAuth();
+const { packages } = usePackages();
+const { subscription } = useSubscription();
+const { conversations, sendMessage } = useChatbot();
+```
+
+## 📁 Project Structure
 
 ```
 web/
 ├── src/
-│   ├── app/                    # Next.js App Router
-│   │   ├── page.tsx           # Trang chủ
-│   │   ├── about/             # Giới thiệu
-│   │   ├── news/              # Tin tức
-│   │   ├── pricing/           # Bảng giá
-│   │   ├── contact/           # Liên hệ
-│   │   ├── login/             # Đăng nhập
-│   │   ├── register/          # Đăng ký
-│   │   ├── logout/            # Đăng xuất
-│   │   ├── chat/              # Chat AI
-│   │   ├── account/           # Quản lý tài khoản
-│   │   ├── admin/             # Admin dashboard
-│   │   ├── layout.tsx         # Root layout
-│   │   └── globals.css        # Global styles & theme
-│   │
-│   ├── components/            # React components
-│   │   ├── ui/               # shadcn/ui components
-│   │   ├── header.tsx        # Header component
-│   │   └── footer.tsx        # Footer component
-│   │
-│   └── lib/                  # Utilities
-│       └── utils.ts          # Helper functions
-│
-├── public/                   # Static assets
-├── components.json           # shadcn/ui config
-├── next.config.ts           # Next.js config
-├── tailwind.config.ts       # Tailwind config (v4)
-└── tsconfig.json            # TypeScript config
+│   ├── components/     # Reusable UI components
+│   ├── pages/          # Page components
+│   ├── hooks/          # Custom React hooks
+│   ├── lib/            # Utilities and API clients
+│   ├── assets/         # Static assets
+│   └── App.tsx         # Main app component
+├── public/             # Public static files
+├── .env.development    # Dev environment config
+├── .env.staging        # Staging environment config
+├── .env.production     # Production environment config
+└── vite.config.ts      # Vite configuration
 ```
 
-## Tính năng chính
+## 🛠️ Tech Stack
 
-### 1. Trang chủ
-- Hero section với CTA
-- Feature cards
-- Benefits section
-- Customer testimonials
-- Floating animations
+- **Framework**: React 18
+- **Build Tool**: Vite 5
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS + shadcn/ui
+- **State Management**: TanStack Query (React Query)
+- **Routing**: React Router v6
+- **HTTP Client**: Fetch API
+- **Animations**: GSAP
 
-### 2. Chat AI
-- ChatGPT/Claude-like interface
-- Sidebar với chat history
-- Real-time messaging UI
-- Responsive mobile menu
+## 📝 Development Guidelines
 
-### 3. Admin Dashboard
-- Analytics overview với stats cards
-- Subscription distribution charts
-- User management table với CRUD
-- Subscription tier management
-- Recent activity feed
+### Port Management
 
-### 4. Quản lý tài khoản
-- Profile management
-- Company information
-- Subscription details & billing history
-- Security settings (password, 2FA)
-- Notification preferences
+**DO NOT hardcode ports** in component code. Always use environment variables:
 
-### 5. Bảng giá
-- 3 subscription tiers
-- Feature comparison
-- Add-ons section
-- FAQ section
+```typescript
+// ❌ Bad
+const API_URL = "http://localhost:8001";
 
-## Ngôn ngữ
+// ✅ Good
+const API_URL = import.meta.env.VITE_API_BASE_URL;
+```
 
-- ✅ **100% Tiếng Việt** - Tất cả nội dung trong tiếng Việt
-- ✅ Vietnamese font support (Plus Jakarta Sans, Inter)
-- ✅ Vietnamese locale (vi_VN)
+### CORS Configuration
 
-## Thư viện shadcn/ui đã cài đặt
+Backend CORS is configured to allow:
+- `http://localhost:3000`
+- `http://localhost:3001`
+- `http://localhost:3002`
+- `http://localhost:8080`
 
-- Button, Card, Input, Label, Textarea
-- Select, Dropdown Menu, Avatar, Badge
-- Dialog, Separator, Sheet, Tabs
-- Scroll Area, Table, Tooltip, Popover
-- Navigation Menu, Sidebar, Chart
+If you need a different port, update backend `CORS_ALLOWED_ORIGINS` environment variable.
 
-## Tối ưu hóa
+### Environment-Specific Builds
 
-- ✅ SEO-friendly metadata
-- ✅ Vietnamese language support
-- ✅ Responsive design
-- ✅ Fast page loads
-- ✅ Optimized animations
-- ✅ Accessible components
+To build for a specific environment:
 
-## Phát triển tiếp
+```bash
+# Development build (includes source maps, debug tools)
+npm run build:dev
 
-### Chức năng có thể thêm:
-- [ ] Backend integration với API
-- [ ] Authentication (NextAuth.js hoặc Clerk)
-- [ ] Database integration (PostgreSQL)
-- [ ] Real AI chatbot integration
-- [ ] Payment integration (VNPay, Momo)
-- [ ] Email notifications
-- [ ] Advanced analytics
-- [ ] Multi-language support
+# Staging build (production-like, with debugging)
+npm run build:staging
 
-## License
+# Production build (optimized, no debugging)
+npm run build
+```
 
-Proprietary - EPR SaaS Platform
+## 🔍 Troubleshooting
+
+### Port Already in Use
+
+If port 8080 is already in use, Vite will automatically try the next available port.
+
+To force a specific port:
+```bash
+VITE_PORT=9000 npm run dev
+```
+
+### CORS Errors
+
+1. Ensure backend is running on correct port (8001)
+2. Check backend CORS configuration includes your frontend port
+3. Verify `.env` file has correct API URLs
+
+### API Connection Issues
+
+1. Check backend services are running:
+   ```bash
+   docker ps | grep epr
+   ```
+
+2. Test API endpoints:
+   ```bash
+   curl http://localhost:8001/health
+   curl http://localhost:8000/health
+   ```
+
+## 📚 Learn More
+
+- [Vite Documentation](https://vitejs.dev/)
+- [React Documentation](https://react.dev/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [shadcn/ui](https://ui.shadcn.com/)

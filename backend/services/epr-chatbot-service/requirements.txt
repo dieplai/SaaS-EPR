@@ -41,3 +41,9 @@ httpx>=0.26.0,<1.0.0
 
 # Redis for caching and rate limiting
 redis>=5.0.0,<6.0.0
+
+# PostgreSQL database client
+psycopg2-binary>=2.9.0,<3.0.0
+
+# JWT for authentication
+PyJWT>=2.8.0,<3.0.0

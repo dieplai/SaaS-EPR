@@ -17,7 +17,7 @@ import sys
 import asyncio
 import importlib.util
 import logging
-from typing import AsyncIterator, Dict, Any, List
+from typing import AsyncIterator, Dict, Any, List, Optional
 from contextlib import redirect_stdout, redirect_stderr
 import io
 from datetime import datetime
@@ -34,9 +34,10 @@ from pathlib import Path
 # Load environment variables
 load_dotenv()
 
-# Import Redis and Backend clients
+# Import Redis, Backend, and Database clients
 from redis_client import redis_client
 from backend_client import backend_client
+from database_client import database_client
 
 # ==========================================
 # 🔧 CUSTOM JSON ENCODER
@@ -189,11 +190,45 @@ def extract_auth_token(request: Request) -> str:
     logger.debug("⚠️ No auth token found in cookies or headers")
     return ""
 
-def get_user_id_from_token(token: str) -> str:
-    """Extract user ID from JWT token (simplified)"""
-    # In production, properly decode and verify JWT
-    # For now, we rely on backend API validation
-    return "anonymous" if not token else "authenticated"
+def get_user_id_from_token(auth_token: str) -> str:
+    """
+    Extract user_id from JWT token
+
+    Args:
+        auth_token: JWT token string
+
+    Returns:
+        str: User ID extracted from token
+
+    Raises:
+        HTTPException: If token is invalid or user_id not found
+    """
+    import jwt
+    import os
+
+    if not auth_token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        decoded = jwt.decode(
+            auth_token,
+            os.getenv("JWT_SECRET", "your-secret-key"),
+            algorithms=["HS256"]
+        )
+        user_id = decoded.get("user_id") or decoded.get("sub")
+
+        if not user_id:
+            raise HTTPException(status_code=401, detail="User ID not found in token")
+
+        return user_id
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid authentication token")
+    except Exception as e:
+        logger.error(f"❌ Error decoding token: {e}")
+        raise HTTPException(status_code=401, detail="Authentication failed")
 
 # ==========================================
 # 🛡️ RATE LIMITING MIDDLEWARE
@@ -203,13 +238,18 @@ def get_user_id_from_token(token: str) -> str:
 async def rate_limit_middleware(request: Request, call_next):
     """Rate limiting for chatbot API"""
     # Skip rate limiting for health checks and docs
-    if request.url.path in ["/", f"{API_PREFIX}/health", f"{API_PREFIX}/docs", f"{API_PREFIX}/openapi.json"]:
+    if request.url.path in ["/", "/health", f"{API_PREFIX}/health", f"{API_PREFIX}/docs", f"{API_PREFIX}/openapi.json"]:
         return await call_next(request)
 
     # Get client identifier (IP or user ID)
     client_ip = request.client.host if request.client else "unknown"
     auth_token = extract_auth_token(request)
-    user_id = get_user_id_from_token(auth_token)
+
+    # Skip authentication requirement if no token provided (allow anonymous access with lower rate limit)
+    if not auth_token:
+        user_id = None
+    else:
+        user_id = get_user_id_from_token(auth_token)
 
     # Use user ID if authenticated, otherwise IP
     rate_limit_key = f"rate_limit:chatbot:{user_id if auth_token else client_ip}"
@@ -289,6 +329,7 @@ class ChatRequest(BaseModel):
     chat_history: str = ""
     faq_threshold: float = 0.6
     use_parallel: bool = True
+    session_id: Optional[str] = None  # Conversation session ID for saving messages
     # Auth token will be extracted from Authorization header instead
 
 class ChatHistoryResponse(BaseModel):
@@ -370,6 +411,31 @@ async def chat(chat_request: ChatRequest, http_request: Request):
             """Async generator that streams response chunks and tracks tokens"""
             total_tokens = 0
             response_text = ""
+            response_sources = []
+
+            # Extract user_id from JWT if available (for saving messages)
+            user_id = None
+            if auth_token and chat_request.session_id:
+                try:
+                    import jwt
+                    import os
+                    decoded = jwt.decode(auth_token, os.getenv("JWT_SECRET", "your-secret-key"), algorithms=["HS256"])
+                    user_id = decoded.get("user_id") or decoded.get("sub")
+
+                    # Save user message to database
+                    if user_id:
+                        await database_client.save_message(
+                            session_id=chat_request.session_id,
+                            user_id=user_id,
+                            role="user",
+                            content=chat_request.question,
+                            model=None,
+                            tokens_used=0,
+                            sources=None
+                        )
+                        logger.info(f"💾 Saved user message to session {chat_request.session_id}")
+                except Exception as e:
+                    logger.warning(f"⚠️  Could not save user message: {e}")
 
             try:
                 # Call the optimized chatbot pipeline
@@ -382,13 +448,22 @@ async def chat(chat_request: ChatRequest, http_request: Request):
                     # Track response text for token counting
                     if update.get("type") == "response_chunk":
                         chunk_text = update.get("chunk", "")  # ← FIXED: Use 'chunk' not 'text'
+                        logger.info(f"📨 SERVER: Received chunk ({len(chunk_text)} chars): {chunk_text[:100]}...")
                         response_text += chunk_text
                     elif update.get("type") == "response_complete":
                         response_text = update.get("response", response_text)
+                        response_sources = update.get("documents", [])
+                        logger.info(f"📨 SERVER: Received complete response ({len(response_text)} chars)")
+                    elif update.get("type") == "clarification_needed":
+                        # Track clarification message for token counting
+                        clarification_text = update.get("message", "")
+                        response_text += clarification_text
+                        logger.info(f"🔍 SERVER: Clarification needed - {update.get('issue_type')}")
 
                     # Convert each update to JSON and send as SSE event
                     try:
                         json_str = json.dumps(update, cls=CustomJSONEncoder)
+                        logger.info(f"📤 SERVER: Sending SSE: {json_str[:150]}...")
                         yield f"data: {json_str}\n\n"
                     except Exception as e:
                         logger.error(f"Error serializing update: {e}")
@@ -421,6 +496,33 @@ async def chat(chat_request: ChatRequest, http_request: Request):
                             "error": error_msg if not success else None
                         }
                         yield f"data: {json.dumps(token_update)}\n\n"
+
+                    # Save assistant response to database
+                    if user_id and chat_request.session_id:
+                        try:
+                            # Convert Document objects to dicts for JSON serialization
+                            sources_json = None
+                            if response_sources:
+                                sources_json = [
+                                    {
+                                        "page_content": doc.page_content if hasattr(doc, 'page_content') else str(doc),
+                                        "metadata": doc.metadata if hasattr(doc, 'metadata') else {}
+                                    }
+                                    for doc in response_sources
+                                ]
+
+                            await database_client.save_message(
+                                session_id=chat_request.session_id,
+                                user_id=user_id,
+                                role="assistant",
+                                content=response_text,
+                                model="gpt-4o-mini",  # TODO: Get actual model from config
+                                tokens_used=total_tokens,
+                                sources=sources_json
+                            )
+                            logger.info(f"💾 Saved assistant message to session {chat_request.session_id}")
+                        except Exception as e:
+                            logger.error(f"⚠️  Could not save assistant message: {e}", exc_info=True)
 
                         if not success:
                             logger.warning(f"⚠️  Token consumption failed: {error_msg}")
@@ -496,6 +598,139 @@ async def clear_memory():
             status_code=500,
             detail=f"Error clearing memory: {str(e)}"
         )
+
+# ==========================================
+# 💬 CONVERSATION MANAGEMENT ENDPOINTS
+# ==========================================
+
+@app.post(f"{API_PREFIX}/conversations")
+async def create_conversation(request: Request):
+    """
+    Create a new conversation session
+
+    Returns:
+        Dict with conversation session ID
+    """
+    try:
+        # Extract auth token using centralized helper
+        auth_token = extract_auth_token(request)
+
+        # Extract user_id from token using centralized helper
+        user_id = get_user_id_from_token(auth_token)
+
+        # Create conversation session
+        session_id = await database_client.create_conversation_session(user_id)
+
+        if not session_id:
+            raise HTTPException(status_code=500, detail="Failed to create conversation")
+
+        return {
+            "status": "success",
+            "data": {
+                "session_id": session_id
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error creating conversation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get(f"{API_PREFIX}/conversations")
+async def get_conversations(request: Request, limit: int = 50):
+    """
+    Get user's conversation sessions
+
+    Args:
+        limit: Max number of conversations to return
+
+    Returns:
+        List of conversation sessions
+    """
+    try:
+        # Extract auth token using centralized helper
+        auth_token = extract_auth_token(request)
+
+        # Extract user_id from token using centralized helper
+        user_id = get_user_id_from_token(auth_token)
+
+        # Get user's conversations
+        conversations = await database_client.get_user_conversations(user_id, limit)
+
+        return {
+            "status": "success",
+            "data": conversations
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error getting conversations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get(f"{API_PREFIX}/conversations/{{session_id}}")
+async def get_conversation_messages(session_id: str, request: Request):
+    """
+    Get all messages in a conversation session
+
+    Args:
+        session_id: UUID of the conversation session
+
+    Returns:
+        List of messages
+    """
+    try:
+        # Extract auth token using centralized helper
+        auth_token = extract_auth_token(request)
+
+        # Extract user_id from token using centralized helper
+        user_id = get_user_id_from_token(auth_token)
+
+        # Get conversation messages
+        messages = await database_client.get_conversation_messages(session_id, user_id)
+
+        return {
+            "status": "success",
+            "data": messages
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error getting conversation messages: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete(f"{API_PREFIX}/conversations/{{session_id}}")
+async def delete_conversation(session_id: str, request: Request):
+    """
+    Delete a conversation session
+
+    Args:
+        session_id: UUID of the conversation session
+
+    Returns:
+        Success message
+    """
+    try:
+        # Extract auth token using centralized helper
+        auth_token = extract_auth_token(request)
+
+        # Extract user_id from token using centralized helper
+        user_id = get_user_id_from_token(auth_token)
+
+        # Delete conversation
+        success = await database_client.delete_conversation(session_id, user_id)
+
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete conversation")
+
+        return {
+            "status": "success",
+            "message": "Conversation deleted"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error deleting conversation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ==========================================
 # 📊 INFO ENDPOINT

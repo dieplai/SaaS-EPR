@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth Test - HTTP-only Cookies</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 3px;
+            white-space: pre-wrap;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>Authentication Test - HTTP-only Cookies</h1>
+
+    <div class="test-section">
+        <h2>1. Login</h2>
+        <input type="email" id="email" placeholder="Email" value="dieptrungnam123@gmail.com">
+        <input type="password" id="password" placeholder="Password" value="your-password">
+        <button onclick="testLogin()">Login</button>
+        <div id="loginResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Get Profile (Check Auth)</h2>
+        <button onclick="testGetProfile()">Get Profile</button>
+        <div id="profileResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Logout</h2>
+        <button onclick="testLogout()">Logout</button>
+        <div id="logoutResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Verify Logged Out</h2>
+        <button onclick="testGetProfile()">Try Get Profile Again</button>
+        <p>Should return 401 after logout</p>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8001';
+
+        async function testLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('loginResult');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include', // Important: include cookies
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✓ Login successful!\n\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `✗ Login failed!\n\nStatus: ${response.status}\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `✗ Error: ${error.message}`;
+            }
+        }
+
+        async function testGetProfile() {
+            const resultDiv = document.getElementById('profileResult');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/users/profile`, {
+                    method: 'GET',
+                    credentials: 'include' // Important: include cookies
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✓ Authenticated!\n\nProfile:\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    const data = await response.json().catch(() => ({}));
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `✗ Not authenticated!\n\nStatus: ${response.status}\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `✗ Error: ${error.message}`;
+            }
+        }
+
+        async function testLogout() {
+            const resultDiv = document.getElementById('logoutResult');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/auth/logout`, {
+                    method: 'POST',
+                    credentials: 'include' // Important: include cookies
+                });
+
+                if (response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✓ Logout successful!\n\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    const data = await response.json().catch(() => ({}));
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `✗ Logout failed!\n\nStatus: ${response.status}\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `✗ Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>

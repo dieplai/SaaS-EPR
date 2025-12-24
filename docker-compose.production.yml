@@ -33,4 +33,4 @@ services:
     container_name: epr-web-frontend-prod
     ports:
       - "3100:3000"  # Host:Container
-    # Note: NEXT_PUBLIC_ vars are baked into image at build time, not runtime
+    # Note: VITE_ environment vars are baked into image at build time, not runtime

@@ -33,4 +33,4 @@ services:
     container_name: epr-web-frontend
     ports:
       - "3000:3000"  # Staging uses default port 3000
-    # Note: NEXT_PUBLIC_ vars are baked into image at build time, not runtime
+    # Note: VITE_ environment vars are baked into image at build time, not runtime

@@ -217,10 +217,10 @@ func createDefaultSystemSettings(db *gorm.DB) error {
 		},
 		{
 			ID:           uuid.New(),
-			SettingKey:   "token_reset_schedule",
-			SettingValue: "0 0 1 * *",
-			Description:  "Cron schedule for token reset (default: first day of month at midnight)",
-			ValueType:    "string",
+			SettingKey:   "token_reset_cycle_days",
+			SettingValue: "30",
+			Description:  "Number of days in token reset cycle (default: 30 days)",
+			ValueType:    "integer",
 		},
 		{
 			ID:           uuid.New(),
@@ -248,18 +248,18 @@ func createDefaultPackages(db *gorm.DB) error {
 		{
 			ID:           uuid.New(),
 			Name:         "Free",
-			Description:  "Free tier with basic features",
-			Price:        0,
-			TokenLimit:   100,
+			Description:  "Free tier for new users",
+			Price:        0, // Free package
+			TokenLimit:   100, // Will sync with free_account_token_limit setting
 			DurationDays: 30,
-			Features:     subscriptioninfra.FeatureArray{"Basic AI Chat", "100 tokens/month"},
-			IsActive:     true,
+			Features:     subscriptioninfra.FeatureArray{"Basic AI Chat", "Limited tokens"},
+			IsActive:     false, // Hidden from pricing page, only for auto-assignment
 		},
 		{
 			ID:           uuid.New(),
 			Name:         "Starter",
 			Description:  "Perfect for individuals and small teams",
-			Price:        99000,
+			Price:        9.99, // USD
 			TokenLimit:   1000,
 			DurationDays: 30,
 			Features:     subscriptioninfra.FeatureArray{"AI Chat", "Document Analysis", "1000 tokens/month"},
@@ -267,9 +267,9 @@ func createDefaultPackages(db *gorm.DB) error {
 		},
 		{
 			ID:           uuid.New(),
-			Name:         "Professional",
+			Name:         "Pro",
 			Description:  "For growing businesses",
-			Price:        299000,
+			Price:        29.99, // USD
 			TokenLimit:   5000,
 			DurationDays: 30,
 			Features:     subscriptioninfra.FeatureArray{"AI Chat", "Document Analysis", "Priority Support", "5000 tokens/month"},
@@ -279,7 +279,7 @@ func createDefaultPackages(db *gorm.DB) error {
 			ID:           uuid.New(),
 			Name:         "Enterprise",
 			Description:  "For large organizations with custom needs",
-			Price:        999000,
+			Price:        99.99, // USD
 			TokenLimit:   20000,
 			DurationDays: 30,
 			Features:     subscriptioninfra.FeatureArray{"AI Chat", "Document Analysis", "Priority Support", "Custom Integration", "20000 tokens/month"},
