@@ -80,12 +80,50 @@ else
   exit 1
 fi
 
+# ============================================
+# Install PostgreSQL Extensions (SUPERUSER REQUIRED)
+# ============================================
+# Extensions must be created by postgres superuser BEFORE running migrations
+# This is a one-time infrastructure setup, not part of versioned migrations
+echo -e "${YELLOW}Installing PostgreSQL extensions${NC}"
+
+# Install extensions in production database
+echo -e "${YELLOW}  → Production database extensions${NC}"
+docker exec -i epr-postgres psql -U postgres -d epr_saas_production <<EOF
+-- UUID generation
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Password hashing
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Vector embeddings (pgvector) for RAG/semantic search
+CREATE EXTENSION IF NOT EXISTS "vector";
+EOF
+
+# Install extensions in staging database
+echo -e "${YELLOW}  → Staging database extensions${NC}"
+docker exec -i epr-postgres psql -U postgres -d epr_saas_staging <<EOF
+-- UUID generation
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Password hashing
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Vector embeddings (pgvector) for RAG/semantic search
+CREATE EXTENSION IF NOT EXISTS "vector";
+EOF
+
+echo -e "${GREEN}OK: Extensions installed${NC}"
+
 # Grant schema permissions for production
 echo -e "${YELLOW}Configuring production database permissions${NC}"
 docker exec -i epr-postgres psql -U postgres -d epr_saas_production <<EOF
 GRANT ALL ON SCHEMA public TO epr_production;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO epr_production;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO epr_production;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO epr_production;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO epr_production;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO epr_production;
 EOF
 
 # Grant schema permissions for staging
@@ -94,6 +132,9 @@ docker exec -i epr-postgres psql -U postgres -d epr_saas_staging <<EOF
 GRANT ALL ON SCHEMA public TO epr_staging;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO epr_staging;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO epr_staging;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO epr_staging;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO epr_staging;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO epr_staging;
 EOF
 
 # Verify databases exist

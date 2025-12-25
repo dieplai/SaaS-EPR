@@ -9,9 +9,16 @@
 -- ============================================
 -- EXTENSIONS
 -- ============================================
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "vector";  -- pgvector for embeddings
+-- NOTE: Extensions are created in db/setup.sh (run as postgres superuser)
+-- This migration assumes the following extensions are already installed:
+--   - uuid-ossp (UUID generation)
+--   - pgcrypto (password hashing)
+--   - vector (pgvector for embeddings)
+--
+-- Separating extension creation from migrations is a best practice because:
+--   1. Extensions require SUPERUSER privileges
+--   2. Migrations run as application user (epr_staging/epr_production)
+--   3. Extensions are infrastructure setup, not application schema
 
 -- ============================================
 -- 1. USERS & AUTHENTICATION
