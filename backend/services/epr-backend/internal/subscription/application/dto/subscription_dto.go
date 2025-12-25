@@ -10,7 +10,7 @@ import (
 type SubscriptionDTO struct {
 	ID                 uuid.UUID  `json:"id"`
 	UserID             uuid.UUID  `json:"user_id"`
-	PackageID          uuid.UUID  `json:"package_id"`
+	PackageID          *uuid.UUID `json:"package_id,omitempty"` // Nullable for FREE accounts
 	PackageName        string     `json:"package_name,omitempty"` // Populated by query handler
 	StartDate          time.Time  `json:"start_date"`
 	EndDate            time.Time  `json:"end_date"`
@@ -27,7 +27,7 @@ type SubscriptionDTO struct {
 }
 
 type CreateSubscriptionRequest struct {
-	PackageID uuid.UUID `json:"package_id" binding:"required"`
+	PackageID *uuid.UUID `json:"package_id"` // Optional - nil for FREE accounts
 }
 
 type ConsumeTokensRequest struct {

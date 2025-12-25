@@ -41,14 +41,23 @@ func (h *ConsumeTokensHandler) Handle(ctx context.Context, cmd ConsumeTokensComm
 
 	// Check if subscription needs renewal (billing period ended)
 	if sub.NeedsRenewal() {
-		// Get package details for duration
-		pkg, err := h.packageRepo.FindByID(ctx, sub.GetPackageID())
-		if err != nil {
-			return err
+		var durationDays int
+
+		// Get renewal duration
+		if sub.GetPackageID() == nil {
+			// FREE account - never expires (use 365 days for renewal)
+			durationDays = 365
+		} else {
+			// PAID package - get duration from package
+			pkg, err := h.packageRepo.FindByID(ctx, *sub.GetPackageID())
+			if err != nil {
+				return err
+			}
+			durationDays = pkg.GetDuration().Days()
 		}
 
 		// Renew subscription period and refill tokens
-		if err := sub.RenewPeriod(pkg.GetDuration().Days()); err != nil {
+		if err := sub.RenewPeriod(durationDays); err != nil {
 			return err
 		}
 

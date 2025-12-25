@@ -43,10 +43,15 @@ func (h *GetSubscriptionHandler) Handle(ctx context.Context, query GetSubscripti
 	// Convert to DTO
 	subscriptionDTO := dto.SubscriptionToDTO(sub)
 
-	// Fetch package name
-	pkg, err := h.packageRepo.FindByID(ctx, sub.GetPackageID())
-	if err == nil && pkg != nil {
-		subscriptionDTO.PackageName = pkg.GetName()
+	// Fetch package name (only for PAID subscriptions)
+	if sub.GetPackageID() != nil {
+		pkg, err := h.packageRepo.FindByID(ctx, *sub.GetPackageID())
+		if err == nil && pkg != nil {
+			subscriptionDTO.PackageName = pkg.GetName()
+		}
+	} else {
+		// FREE account
+		subscriptionDTO.PackageName = "Free"
 	}
 
 	return subscriptionDTO, nil
