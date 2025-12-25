@@ -90,10 +90,10 @@ const Footer = () => {
 
         <div className="mt-16 pt-8 border-t border-border/50 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} EPR AI. {t('footer.copyright')}
+            © {new Date().getFullYear()} Diep Lai. {t('footer.copyright')}
           </p>
           <p className="text-sm text-muted-foreground">
-            {t('footer.tagline')}
+            Designed with 💚 for a sustainable future
           </p>
         </div>
       </div>

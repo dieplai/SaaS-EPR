@@ -50,10 +50,10 @@ const Navbar = () => {
   // Header stays in English as requested
   const navLinks = [
     { name: "Home", href: "/" },
-    { name: "Pricing", href: "/pricing" },
     { name: "Blog", href: "/blog" },
-    { name: "Chatbot", href: "/chat" },
+    { name: "Pricing", href: "/pricing" },
     { name: "Contact", href: "/contact" },
+    { name: "Chatbot", href: "/chat" },
   ];
 
   const toggleTheme = () => {

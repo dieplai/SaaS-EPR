@@ -438,10 +438,11 @@ async def chat(chat_request: ChatRequest, http_request: Request):
                     logger.warning(f"⚠️  Could not save user message: {e}")
 
             try:
-                # Call the optimized chatbot pipeline
+                # Call the optimized chatbot pipeline with session_id for auto-history loading
                 async for update in chatbot_core.optimized_chatbot_pipeline(
                     query=chat_request.question,
                     chat_history=chat_request.chat_history,
+                    session_id=chat_request.session_id,  # ✅ Pass session_id for auto-history loading
                     faq_threshold=chat_request.faq_threshold,
                     use_parallel=chat_request.use_parallel
                 ):
@@ -521,6 +522,16 @@ async def chat(chat_request: ChatRequest, http_request: Request):
                                 sources=sources_json
                             )
                             logger.info(f"💾 Saved assistant message to session {chat_request.session_id}")
+
+                            # ✅ ALSO save to LangChain history for auto-loading
+                            try:
+                                from chat_memory import add_message_to_history
+                                add_message_to_history(chat_request.session_id, "user", chat_request.question)
+                                add_message_to_history(chat_request.session_id, "assistant", response_text)
+                                logger.info(f"💾 Saved messages to LangChain history for session {chat_request.session_id}")
+                            except Exception as lc_error:
+                                logger.warning(f"⚠️  Could not save to LangChain history: {lc_error}")
+
                         except Exception as e:
                             logger.error(f"⚠️  Could not save assistant message: {e}", exc_info=True)
 
@@ -676,7 +687,7 @@ async def get_conversation_messages(session_id: str, request: Request):
         session_id: UUID of the conversation session
 
     Returns:
-        List of messages
+        Conversation with messages and metadata
     """
     try:
         # Extract auth token using centralized helper
@@ -685,12 +696,15 @@ async def get_conversation_messages(session_id: str, request: Request):
         # Extract user_id from token using centralized helper
         user_id = get_user_id_from_token(auth_token)
 
-        # Get conversation messages
-        messages = await database_client.get_conversation_messages(session_id, user_id)
+        # Get conversation info and messages
+        conversation_info = await database_client.get_conversation_with_messages(session_id, user_id)
+
+        if not conversation_info:
+            raise HTTPException(status_code=404, detail="Conversation not found")
 
         return {
             "status": "success",
-            "data": messages
+            "data": conversation_info
         }
     except HTTPException:
         raise
@@ -730,6 +744,35 @@ async def delete_conversation(session_id: str, request: Request):
         raise
     except Exception as e:
         logger.error(f"❌ Error deleting conversation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete(f"{API_PREFIX}/conversations")
+async def delete_all_conversations(request: Request):
+    """
+    Delete all conversation sessions for the authenticated user
+
+    Returns:
+        Success message with count of deleted conversations
+    """
+    try:
+        # Extract auth token using centralized helper
+        auth_token = extract_auth_token(request)
+
+        # Extract user_id from token using centralized helper
+        user_id = get_user_id_from_token(auth_token)
+
+        # Delete all conversations
+        deleted_count = await database_client.delete_all_conversations(user_id)
+
+        return {
+            "status": "success",
+            "message": f"Deleted {deleted_count} conversation(s)",
+            "deleted_count": deleted_count
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error deleting all conversations: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ==========================================

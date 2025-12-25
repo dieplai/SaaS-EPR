@@ -36,12 +36,14 @@ import {
   QrCode,
   ArrowLeft,
   ClipboardCopy,
+  Home,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { chatbotClient } from "@/lib/api-client";
+import { adminApiClient } from "@/lib/admin-api-client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -79,17 +81,27 @@ const suggestedQuestions = [
   "When is the France AGEC reporting deadline?",
 ];
 
+interface PlanPackage {
+  id: string;
+  name: string;
+  price: number;
+  token_limit: number;
+  features: string[];
+}
+
 const Chat = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [thinkingStatus, setThinkingStatus] = useState<string>("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"general" | "personalization" | "data">("general");
   const [planOpen, setPlanOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<"free" | "pro" | "enterprise" | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<PlanPackage | null>(null);
+  const [plans, setPlans] = useState<PlanPackage[]>([]);
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved === 'dark';
@@ -97,6 +109,7 @@ const Chat = () => {
   });
   const [notifications, setNotifications] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   // Real hooks
@@ -122,13 +135,17 @@ const Chat = () => {
 
         // Ensure data is an array
         if (Array.isArray(data)) {
-          setConversations(data.map((conv: any) => ({
-            id: conv.session_id,
+          const mappedConversations = data.map((conv: any) => ({
+            id: conv.id || conv.session_id,
             title: conv.title || "New chat",
-            messages: conv.messages || [],
+            messages: [], // Messages will be loaded separately when needed
             createdAt: new Date(conv.created_at),
-            updatedAt: new Date(conv.updated_at || conv.created_at),
-          })));
+            updatedAt: new Date(conv.last_message_at || conv.created_at),
+          }));
+
+          setConversations(mappedConversations);
+
+          // Don't auto-select - always start with new chat
         } else {
           console.warn("getConversations returned non-array:", data);
           setConversations([]);
@@ -153,6 +170,52 @@ const Chat = () => {
   const activeConversation = conversations.find(c => c.id === activeConversationId);
   const messages = activeConversation?.messages || [];
 
+  // Load messages when active conversation changes
+  useEffect(() => {
+    const loadMessages = async () => {
+      if (!activeConversationId) return;
+
+      // Check if messages are already loaded
+      const conv = conversations.find(c => c.id === activeConversationId);
+      if (conv && conv.messages.length > 0) return;
+
+      // Skip loading for local conversations (not saved to backend yet)
+      // Local conversations have timestamp IDs or start with "session_"
+      const isLocalConversation = /^\d+$/.test(activeConversationId) || activeConversationId.startsWith("session_");
+      if (isLocalConversation) {
+        console.log("Skipping message load for local conversation:", activeConversationId);
+        return;
+      }
+
+      try {
+        const data = await chatbotClient.getConversation(activeConversationId);
+        if (data && data.messages) {
+          // Update the conversation with loaded messages
+          setConversations(prev =>
+            prev.map(c =>
+              c.id === activeConversationId
+                ? {
+                    ...c,
+                    messages: data.messages.map((msg: any) => ({
+                      id: msg.id || Date.now().toString(),
+                      role: msg.role,
+                      content: msg.content,
+                      timestamp: new Date(msg.created_at || Date.now()),
+                    })),
+                    title: data.title || c.title,
+                  }
+                : c
+            )
+          );
+        }
+      } catch (error) {
+        console.error("Failed to load conversation messages:", error);
+      }
+    };
+
+    loadMessages();
+  }, [activeConversationId, conversations]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -161,16 +224,38 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
-  const createNewConversation = () => {
-    const newConversation: Conversation = {
-      id: Date.now().toString(),
-      title: "New chat",
-      messages: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
+  // Auto-focus input on mount (for better UX)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Load pricing packages from DB
+  useEffect(() => {
+    const loadPackages = async () => {
+      try {
+        const packages = await adminApiClient.packages.list();
+        const activePlans = packages
+          .filter(pkg => pkg.is_active)
+          .sort((a, b) => a.price - b.price); // Sort by price ascending
+        setPlans(activePlans);
+      } catch (error) {
+        console.error("Failed to load packages:", error);
+      }
     };
-    setConversations(prev => [newConversation, ...prev]);
-    setActiveConversationId(newConversation.id);
+    loadPackages();
+  }, []);
+
+  const createNewConversation = () => {
+    // Simply reset active conversation ID
+    // Actual conversation will be created in backend when user sends first message
+    setActiveConversationId(null);
+    // Auto-focus to input for immediate typing
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
   };
 
   const deleteConversation = async (id: string) => {
@@ -200,6 +285,7 @@ const Chat = () => {
     const userMessageContent = input.trim();
     setInput("");
     setIsLoading(true);
+    setThinkingStatus(""); // Reset thinking status for new message
 
     try {
       let sessionId = activeConversationId;
@@ -212,18 +298,38 @@ const Chat = () => {
         timestamp: new Date(),
       };
 
-      // If no active conversation, create one
+      // If no active conversation, create one in backend
       if (!sessionId) {
-        const newConversation: Conversation = {
-          id: `session_${Date.now()}`,
-          title: userMessageContent.slice(0, 30) + (userMessageContent.length > 30 ? "..." : ""),
-          messages: [userMessage],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        setConversations(prev => [newConversation, ...prev]);
-        sessionId = newConversation.id;
-        setActiveConversationId(sessionId);
+        try {
+          // Call backend API to create conversation in database
+          const createdConversation = await chatbotClient.createConversation();
+          sessionId = createdConversation?.session_id;
+
+          if (!sessionId) {
+            throw new Error("Failed to create conversation");
+          }
+
+          // Create conversation in local state
+          const newConversation: Conversation = {
+            id: sessionId,
+            title: userMessageContent.slice(0, 30) + (userMessageContent.length > 30 ? "..." : ""),
+            messages: [userMessage],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+          setConversations(prev => [newConversation, ...prev]);
+          setActiveConversationId(sessionId);
+        } catch (error) {
+          console.error("Failed to create conversation:", error);
+          toast({
+            title: "Error",
+            description: "Failed to create conversation. Please try again.",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          setThinkingStatus("");
+          return;
+        }
       } else {
         // Add to existing conversation
         setConversations(prev =>
@@ -239,28 +345,70 @@ const Chat = () => {
         );
       }
 
-      // Send to chatbot API
-      const response = await chatbotClient.sendMessage(userMessageContent, sessionId);
-
-      // Add AI response to UI
+      // Create placeholder AI message for streaming
+      const aiMessageId = (Date.now() + 1).toString();
       const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: aiMessageId,
         role: "assistant",
-        content: response.response || response.message || "No response",
+        content: "",
         timestamp: new Date(),
       };
 
+      // Add placeholder AI message to UI
       setConversations(prev =>
         prev.map(c =>
           c.id === sessionId
             ? {
                 ...c,
                 messages: [...c.messages, aiMessage],
-                title: c.messages.length === 1 ? userMessageContent.slice(0, 30) + (userMessageContent.length > 30 ? "..." : "") : c.title,
                 updatedAt: new Date(),
               }
             : c
         )
+      );
+
+      // Send to chatbot API with streaming callbacks
+      await chatbotClient.sendMessage(
+        userMessageContent,
+        sessionId,
+        // onChunk callback - update message content as chunks arrive
+        (chunk: string) => {
+          // Clear thinking status when first chunk arrives
+          setThinkingStatus("");
+          setConversations(prev =>
+            prev.map(c =>
+              c.id === sessionId
+                ? {
+                    ...c,
+                    messages: c.messages.map(m =>
+                      m.id === aiMessageId
+                        ? { ...m, content: m.content + chunk }
+                        : m
+                    ),
+                  }
+                : c
+            )
+          );
+        },
+        // onComplete callback - update title if first message
+        (completeResponse: string, sources: any[]) => {
+          setThinkingStatus("");
+          setConversations(prev =>
+            prev.map(c =>
+              c.id === sessionId
+                ? {
+                    ...c,
+                    title: c.messages.length === 2 ? userMessageContent.slice(0, 30) + (userMessageContent.length > 30 ? "..." : "") : c.title,
+                    updatedAt: new Date(),
+                  }
+                : c
+            )
+          );
+        },
+        // onStatus callback - update thinking status
+        (status: string, stage: string) => {
+          setThinkingStatus(status);
+        }
       );
 
     } catch (error: any) {
@@ -272,11 +420,20 @@ const Chat = () => {
       });
     } finally {
       setIsLoading(false);
+      setThinkingStatus(""); // Clear thinking status on completion
+      // Auto-focus back to input for seamless typing
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
     }
   };
 
   const handleSuggestedQuestion = (question: string) => {
     setInput(question);
+    // Auto-focus to input after setting suggested question
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
   };
 
   const copyToClipboard = (text: string) => {
@@ -571,13 +728,14 @@ const Chat = () => {
                           className="text-destructive hover:text-destructive"
                           onClick={async () => {
                             try {
-                              // Delete all conversations
-                              await Promise.all(
-                                conversations.map(conv => chatbotClient.deleteConversation(conv.id))
-                              );
+                              // Delete all conversations using the new API
+                              const result = await chatbotClient.deleteAllConversations();
                               setConversations([]);
                               setActiveConversationId(null);
-                              toast({ title: "Đã xóa", description: "Tất cả cuộc hội thoại đã được xóa." });
+                              toast({
+                                title: "Đã xóa",
+                                description: `${result?.deleted_count || 0} cuộc hội thoại đã được xóa.`
+                              });
                             } catch (error) {
                               toast({ title: "Lỗi", description: "Không thể xóa tất cả cuộc hội thoại.", variant: "destructive" });
                             }
@@ -652,136 +810,90 @@ const Chat = () => {
           </div>
           
           <div className="p-6 space-y-6">
-            {/* Plans Grid */}
+            {/* Plans Grid - Dynamic from DB */}
             <div className="grid md:grid-cols-3 gap-4">
-              {/* Free Plan */}
-              <div className="relative p-5 rounded-2xl border border-border bg-card hover:border-muted-foreground/30 transition-all group">
-                <div className="mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center mb-3">
-                    <Bot className="w-5 h-5 text-muted-foreground" />
-                  </div>
-                  <h3 className="font-semibold text-foreground">Free</h3>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-2xl font-bold text-foreground">$0</span>
-                    <span className="text-sm text-muted-foreground">/tháng</span>
-                  </div>
-                </div>
-                <ul className="space-y-2.5 mb-5">
-                  <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Check className="w-4 h-4 text-muted-foreground/60" />
-                    50 tokens/tháng
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Check className="w-4 h-4 text-muted-foreground/60" />
-                    Truy cập cơ bản
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Check className="w-4 h-4 text-muted-foreground/60" />
-                    Hỗ trợ email
-                  </li>
-                </ul>
-                <Button 
-                  variant="outline" 
-                  className="w-full" 
-                  onClick={() => {
-                    setSelectedPlan("free");
-                    setPaymentOpen(true);
-                  }}
-                  disabled={user.plan === "Free"}
-                >
-                  {user.plan === "Free" ? "Gói hiện tại" : "Chọn gói này"}
-                </Button>
-              </div>
+              {plans.map((plan, index) => {
+                const isCurrentPlan = user.plan === plan.name;
+                const isPro = index === 1; // Middle plan (Pro)
+                const isEnterprise = plan.name.toLowerCase().includes('enterprise') || plan.name.toLowerCase().includes('doanh');
 
-              {/* Pro Plan - Current */}
-              <div className="relative p-5 rounded-2xl border-2 border-primary bg-primary/5 shadow-lg shadow-primary/10">
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-medium">
-                    Gói hiện tại
-                  </span>
-                </div>
-                <div className="mb-4 pt-2">
-                  <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center mb-3">
-                    <Sparkles className="w-5 h-5 text-primary" />
-                  </div>
-                  <h3 className="font-semibold text-foreground">Pro</h3>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-2xl font-bold text-foreground">$19</span>
-                    <span className="text-sm text-muted-foreground">/tháng</span>
-                  </div>
-                </div>
-                <ul className="space-y-2.5 mb-5">
-                  <li className="flex items-center gap-2 text-sm text-foreground">
-                    <Check className="w-4 h-4 text-primary" />
-                    500 tokens/tháng
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-foreground">
-                    <Check className="w-4 h-4 text-primary" />
-                    Truy cập ưu tiên
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-foreground">
-                    <Check className="w-4 h-4 text-primary" />
-                    Hỗ trợ 24/7
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-foreground">
-                    <Check className="w-4 h-4 text-primary" />
-                    Xuất dữ liệu
-                  </li>
-                </ul>
-                <Button 
-                  className="w-full" 
-                  variant="outline"
-                  onClick={() => {
-                    setSelectedPlan("pro");
-                    setPaymentOpen(true);
-                  }}
-                  disabled={user.plan === "Pro"}
-                >
-                  {user.plan === "Pro" ? "Gói hiện tại" : "Chọn gói này"}
-                </Button>
-              </div>
+                return (
+                  <div
+                    key={plan.id}
+                    className={`relative p-5 rounded-2xl ${
+                      isPro
+                        ? 'border-2 border-primary bg-primary/5 shadow-lg shadow-primary/10'
+                        : 'border border-border bg-card hover:border-muted-foreground/30'
+                    } transition-all group`}
+                  >
+                    {isCurrentPlan && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                        <span className="px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-medium">
+                          Gói hiện tại
+                        </span>
+                      </div>
+                    )}
 
-              {/* Enterprise Plan */}
-              <div className="relative p-5 rounded-2xl border border-border bg-card hover:border-muted-foreground/30 transition-all group">
-                <div className="mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center mb-3">
-                    <Crown className="w-5 h-5 text-amber-500" />
+                    <div className={`mb-4 ${isCurrentPlan ? 'pt-2' : ''}`}>
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${
+                        isPro ? 'bg-primary/20' :
+                        isEnterprise ? 'bg-gradient-to-br from-amber-500/20 to-orange-500/20' :
+                        'bg-muted'
+                      }`}>
+                        {isPro ? <Sparkles className="w-5 h-5 text-primary" /> :
+                         isEnterprise ? <Crown className="w-5 h-5 text-amber-500" /> :
+                         <Bot className="w-5 h-5 text-muted-foreground" />}
+                      </div>
+                      <h3 className="font-semibold text-foreground">{plan.name}</h3>
+                      <div className="flex items-baseline gap-1 mt-1">
+                        {plan.price === 0 ? (
+                          <span className="text-2xl font-bold text-foreground">Miễn phí</span>
+                        ) : (
+                          <>
+                            <span className="text-2xl font-bold text-foreground">${plan.price}</span>
+                            <span className="text-sm text-muted-foreground">/tháng</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <ul className="space-y-2.5 mb-5">
+                      <li className={`flex items-center gap-2 text-sm ${isPro ? 'text-foreground' : 'text-muted-foreground'}`}>
+                        <Check className={`w-4 h-4 ${
+                          isPro ? 'text-primary' :
+                          isEnterprise ? 'text-amber-500/60' :
+                          'text-muted-foreground/60'
+                        }`} />
+                        {plan.token_limit.toLocaleString()} tokens/tháng
+                      </li>
+                      {plan.features.map((feature, i) => (
+                        <li key={i} className={`flex items-center gap-2 text-sm ${isPro ? 'text-foreground' : 'text-muted-foreground'}`}>
+                          <Check className={`w-4 h-4 ${
+                            isPro ? 'text-primary' :
+                            isEnterprise ? 'text-amber-500/60' :
+                            'text-muted-foreground/60'
+                          }`} />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+
+                    <Button
+                      variant="outline"
+                      className={`w-full ${
+                        isEnterprise ? 'group-hover:border-amber-500/50 group-hover:text-amber-500' : ''
+                      } transition-colors`}
+                      onClick={() => {
+                        setSelectedPlan(plan);
+                        setPaymentOpen(true);
+                      }}
+                      disabled={isCurrentPlan}
+                    >
+                      {isCurrentPlan ? 'Gói hiện tại' : 'Chọn gói này'}
+                    </Button>
                   </div>
-                  <h3 className="font-semibold text-foreground">Enterprise</h3>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-2xl font-bold text-foreground">Liên hệ</span>
-                  </div>
-                </div>
-                <ul className="space-y-2.5 mb-5">
-                  <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Check className="w-4 h-4 text-amber-500/60" />
-                    Không giới hạn tokens
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Check className="w-4 h-4 text-amber-500/60" />
-                    Hỗ trợ riêng 1-1
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Check className="w-4 h-4 text-amber-500/60" />
-                    SLA & API access
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Check className="w-4 h-4 text-amber-500/60" />
-                    Tùy chỉnh theo yêu cầu
-                  </li>
-                </ul>
-                <Button 
-                  variant="outline" 
-                  className="w-full group-hover:border-amber-500/50 group-hover:text-amber-500 transition-colors"
-                  onClick={() => {
-                    setSelectedPlan("enterprise");
-                    setPaymentOpen(true);
-                  }}
-                >
-                  Liên hệ sales
-                  <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
-                </Button>
-              </div>
+                );
+              })}
             </div>
 
             {/* Billing Section */}
@@ -829,8 +941,9 @@ const Chat = () => {
                 <div>
                   <DialogTitle className="text-xl font-display font-semibold">Thanh toán chuyển khoản</DialogTitle>
                   <p className="text-sm text-muted-foreground">
-                    {selectedPlan === "pro" ? "Gói Pro - $19/tháng" : 
-                     selectedPlan === "enterprise" ? "Gói Enterprise - Liên hệ" : "Gói Free"}
+                    {selectedPlan
+                      ? `Gói ${selectedPlan.name} - ${selectedPlan.price === 0 ? 'Miễn phí' : `$${selectedPlan.price}/tháng`}`
+                      : 'Chọn gói'}
                   </p>
                 </div>
               </div>
@@ -950,6 +1063,16 @@ const Chat = () => {
         <header className="h-14 bg-background/80 backdrop-blur-xl border-b border-border shrink-0">
           <div className="px-4 h-full flex items-center justify-between">
             <div className="flex items-center gap-3">
+              <Link to="/">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-foreground"
+                  title="Quay về trang chủ"
+                >
+                  <Home className="w-5 h-5" />
+                </Button>
+              </Link>
               <Button
                 variant="ghost"
                 size="icon"
@@ -1039,11 +1162,25 @@ const Chat = () => {
                           message.role === "user" ? "order-first" : ""
                         }`}
                       >
+                        {/* Show thinking status if message is empty and status exists */}
+                        {message.role === "assistant" && !message.content && thinkingStatus && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground italic py-2">
+                            <div className="flex gap-1">
+                              <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" />
+                              <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce [animation-delay:0.1s]" />
+                              <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce [animation-delay:0.2s]" />
+                            </div>
+                            <span>{thinkingStatus}</span>
+                          </div>
+                        )}
+
+                        {/* Show message content */}
+                        {message.content && (
                         <div
                           className={`rounded-2xl px-4 py-3 ${
                             message.role === "user"
                               ? "bg-primary text-primary-foreground"
-                              : "bg-muted/50"
+                              : ""
                           }`}
                         >
                           <div
@@ -1098,8 +1235,10 @@ const Chat = () => {
                             })}
                           </div>
                         </div>
+                        )}
+
                         {/* Message Actions */}
-                        {message.role === "assistant" && (
+                        {message.role === "assistant" && message.content && (
                           <div className="flex items-center gap-1 mt-1.5 ml-1">
                             <button
                               onClick={() => copyToClipboard(message.content)}
@@ -1124,21 +1263,6 @@ const Chat = () => {
                     </div>
                   ))}
 
-                  {/* Typing Indicator */}
-                  {isLoading && (
-                    <div className="flex gap-4">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shrink-0">
-                        <Bot className="w-4 h-4 text-primary-foreground" />
-                      </div>
-                      <div className="bg-muted/50 rounded-2xl px-4 py-3">
-                        <div className="flex gap-1">
-                          <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" />
-                          <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce [animation-delay:0.1s]" />
-                          <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce [animation-delay:0.2s]" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
                   <div ref={messagesEndRef} />
                 </div>
               )}
@@ -1150,6 +1274,7 @@ const Chat = () => {
             <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
               <div className="relative flex items-center gap-2 p-2 bg-muted/50 rounded-xl border border-border focus-within:border-primary/50 transition-colors">
                 <input
+                  ref={inputRef}
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -1166,9 +1291,6 @@ const Chat = () => {
                   <Send className="w-4 h-4" />
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground text-center mt-2">
-                Each query uses 1-5 tokens depending on complexity
-              </p>
             </form>
           </div>
         </main>

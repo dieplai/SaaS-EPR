@@ -277,6 +277,86 @@ class DatabaseClient:
             logger.error(f"❌ Error getting conversation messages: {e}")
             return []
 
+    async def get_conversation_with_messages(self, session_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get conversation session info with all messages
+
+        Args:
+            session_id: UUID of the conversation session
+            user_id: UUID of the user (for security)
+
+        Returns:
+            Dict with conversation info and messages, or None if not found
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+
+            # Get conversation info
+            cursor.execute("""
+                SELECT
+                    id,
+                    title,
+                    message_count,
+                    last_message_at,
+                    created_at
+                FROM conversation_sessions
+                WHERE id = %s AND user_id = %s AND deleted_at IS NULL
+            """, (session_id, user_id))
+
+            conversation = cursor.fetchone()
+
+            if not conversation:
+                cursor.close()
+                conn.close()
+                return None
+
+            # Get messages
+            cursor.execute("""
+                SELECT
+                    role,
+                    content,
+                    model,
+                    tokens_used,
+                    sources,
+                    created_at
+                FROM conversations
+                WHERE conversation_session_id = %s AND user_id = %s
+                ORDER BY created_at ASC
+            """, (session_id, user_id))
+
+            messages = cursor.fetchall()
+            cursor.close()
+            conn.close()
+
+            # Convert messages to list of dicts
+            message_list = []
+            for msg in messages:
+                message_list.append({
+                    "role": msg['role'],
+                    "content": msg['content'],
+                    "model": msg['model'],
+                    "tokens_used": msg['tokens_used'],
+                    "sources": msg['sources'],
+                    "created_at": msg['created_at'].isoformat() if msg['created_at'] else None
+                })
+
+            result = {
+                "id": str(conversation['id']),
+                "title": conversation['title'],
+                "message_count": conversation['message_count'],
+                "last_message_at": conversation['last_message_at'].isoformat() if conversation['last_message_at'] else None,
+                "created_at": conversation['created_at'].isoformat() if conversation['created_at'] else None,
+                "messages": message_list
+            }
+
+            logger.info(f"✅ Retrieved conversation {session_id} with {len(message_list)} messages")
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Error getting conversation with messages: {e}")
+            return None
+
     async def update_conversation_title(self, session_id: str, user_id: str, title: str) -> bool:
         """
         Update conversation session title
@@ -341,6 +421,38 @@ class DatabaseClient:
         except Exception as e:
             logger.error(f"❌ Error deleting conversation: {e}")
             return False
+
+    async def delete_all_conversations(self, user_id: str) -> int:
+        """
+        Soft delete all conversation sessions for a user
+
+        Args:
+            user_id: UUID of the user
+
+        Returns:
+            int: Number of conversations deleted
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                UPDATE conversation_sessions
+                SET deleted_at = NOW()
+                WHERE user_id = %s AND deleted_at IS NULL
+            """, (user_id,))
+
+            deleted_count = cursor.rowcount
+            conn.commit()
+            cursor.close()
+            conn.close()
+
+            logger.info(f"✅ Deleted {deleted_count} conversation sessions for user {user_id}")
+            return deleted_count
+
+        except Exception as e:
+            logger.error(f"❌ Error deleting all conversations: {e}")
+            return 0
 
 
 # Global singleton instance

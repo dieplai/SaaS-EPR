@@ -944,9 +944,12 @@ def analyze_query_clarity(query: str, chat_history: str = "") -> dict:
 
         is_confirmation = any(word in query_lower for word in confirmation_words)
 
-        if result.get("is_clear") and is_confirmation and chat_history:
+        # ✅ FIX: Don't transform if query already has specific keywords (mục X, điều X, chương X)
+        import re
+        has_specific_reference = bool(re.search(r'(mục|điều|chương)\s+\d+', query_lower))
+
+        if result.get("is_clear") and is_confirmation and chat_history and not has_specific_reference:
             # Try to extract suggested query from chat history
-            import re
 
             # Pattern 1: Direct quote "..." in suggestion
             pattern1 = r'Có thể bạn muốn hỏi.*?["\'](.*?)["\']'
@@ -2682,6 +2685,7 @@ def detect_ambiguous_section_query(query: str, documents: list) -> dict:
 async def optimized_chatbot_pipeline(
     query: str,
     chat_history: str = "",
+    session_id: str = None,
     faq_threshold: float = 0.6,
     use_parallel: bool = True
 ) -> AsyncIterator[Dict[str, Any]]:
@@ -2690,7 +2694,8 @@ async def optimized_chatbot_pipeline(
 
     Args:
         query: User's question
-        chat_history: Previous conversation context
+        chat_history: Previous conversation context (optional, will auto-load from DB if session_id provided)
+        session_id: Conversation session ID for auto-loading history from database
         faq_threshold: Minimum FAQ match score
         use_parallel: If True, retrieve FAQ + legal docs in parallel
 
@@ -2702,36 +2707,43 @@ async def optimized_chatbot_pipeline(
     print("🚀 OPTIMIZED PIPELINE START")
     print("🔹"*40)
 
-    # Step 0: Analyze query clarity BEFORE any processing
-    clarity_result = analyze_query_clarity(query, chat_history)
+    # ✅ AUTO-LOAD chat history from database if session_id provided
+    if session_id and not chat_history:
+        try:
+            from chat_memory import get_formatted_history
+            chat_history = get_formatted_history(session_id, max_messages=6)
+            print(f"📚 Auto-loaded {len(chat_history)} chars of history from session {session_id}")
+        except Exception as e:
+            print(f"⚠️  Could not load chat history: {e}")
+            chat_history = ""
 
-    # If clarity analysis suggests a transformed query (e.g., user confirmed suggestion), use it
-    if clarity_result.get("transformed_query"):
-        original_query_before_transform = query
-        query = clarity_result["transformed_query"]
-        print(f"🔄 Query transformed:")
-        print(f"   Original: {original_query_before_transform}")
-        print(f"   Transformed: {query}")
+    # Yield immediate status - let user know we received the message
+    yield {
+        'type': 'status',
+        'message': 'Analyzing your question...',
+        'stage': 'analyzing'
+    }
 
-    if not clarity_result.get("is_clear", True):
-        # Query is ambiguous or illogical - ask for clarification
-        issue_type = clarity_result.get("issue_type", "unknown")
-        clarifying_question = clarity_result.get("clarifying_question", "")
+    # ✨ NEW: Context Engineering - Detect ambiguity using smart rules
+    from context_engine import detect_ambiguity, detect_user_correction
 
-        print(f"⚠️ Query needs clarification: {issue_type}")
-        print(f"   Clarifying question: {clarifying_question}")
+    # Check if user is correcting previous response
+    correction = detect_user_correction(query)
+    if correction:
+        print(f"🔄 User correction detected: {correction['type']}")
+        # Continue processing with corrected understanding
 
-        # TODO: TECHNICAL DEBT - Option B (Quick Fix)
-        # Currently returning clarification as normal text response for simplicity.
-        # FUTURE: Should use 'clarification_needed' type with interactive UI (Option A).
-        # This allows frontend to show clickable suggestion buttons.
-        # Tracked in: Frontend team backlog
+    # Detect ambiguity
+    ambiguity_result = detect_ambiguity(query, chat_history)
 
-        # Return clarifying question as normal text (no icons, no suggestions)
-        # Just a natural conversation asking user to clarify
-        clarification_text = clarifying_question
+    if ambiguity_result.is_ambiguous:
+        # Query is ambiguous - ask for clarification
+        print(f"⚠️ Ambiguity detected: {ambiguity_result.ambiguity_type}")
+        print(f"   Clarifying question: {ambiguity_result.clarification_question}")
 
-        # Return as normal response
+        clarification_text = ambiguity_result.clarification_question
+
+        # Return as normal response (conversational style)
         yield {
             'type': 'response_chunk',
             'chunk': clarification_text,
@@ -2747,9 +2759,9 @@ async def optimized_chatbot_pipeline(
             'stage': 'complete'
         }
 
-        # Stop pipeline - wait for user to rephrase
+        # Stop pipeline - wait for user clarification
         print("🔹"*40)
-        print("⏸️ PIPELINE PAUSED - CLARIFICATION SENT AS TEXT")
+        print("⏸️ PIPELINE PAUSED - WAITING FOR CLARIFICATION")
         print("🔹"*40 + "\n")
         return
 
@@ -2791,7 +2803,7 @@ async def optimized_chatbot_pipeline(
             print("   ✅ Detected as chitchat - generating friendly response")
             yield {
                 'type': 'status',
-                'message': '💬 Generating friendly response...',
+                'message': 'Generating response...',
                 'stage': 'chitchat'
             }
 
@@ -2832,7 +2844,7 @@ async def optimized_chatbot_pipeline(
     # Step 1: Yield status - starting retrieval
     yield {
         'type': 'status',
-        'message': '🔍 Searching knowledge base...',
+        'message': 'Searching knowledge base...',
         'stage': 'retrieval'
     }
 
@@ -2887,7 +2899,7 @@ async def optimized_chatbot_pipeline(
         source_type = "faq"
         yield {
             'type': 'status',
-            'message': '✅ Found answer in FAQ',
+            'message': 'Found answer in FAQ',
             'stage': 'generation',
             'source': 'faq'
         }
@@ -2896,7 +2908,7 @@ async def optimized_chatbot_pipeline(
         source_type = "legal"
         yield {
             'type': 'status',
-            'message': '✅ Found relevant legal documents',
+            'message': 'Found relevant legal documents',
             'stage': 'generation',
             'source': 'legal'
         }
@@ -2904,7 +2916,7 @@ async def optimized_chatbot_pipeline(
         # No documents found - try web search
         yield {
             'type': 'status',
-            'message': '🌐 Searching web for additional information...',
+            'message': 'Searching web for additional information...',
             'stage': 'web_search'
         }
 

@@ -212,7 +212,13 @@ class APIClient {
 
 // Chatbot API Client
 class ChatbotAPIClient extends APIClient {
-  async sendMessage(message: string, sessionId?: string) {
+  async sendMessage(
+    message: string,
+    sessionId?: string,
+    onChunk?: (chunk: string) => void,
+    onComplete?: (response: string, sources: any[]) => void,
+    onStatus?: (status: string, stage: string) => void
+  ) {
     // POST /api/v1/chat returns Server-Sent Events (SSE) streaming
     const url = `${this.baseURL}/api/v1/chat`;
 
@@ -240,6 +246,7 @@ class ChatbotAPIClient extends APIClient {
     const decoder = new TextDecoder();
     let completeResponse = '';
     let sources: any[] = [];
+    let buffer = ''; // Buffer for incomplete lines
 
     if (!reader) {
       throw new Error('No response body');
@@ -250,18 +257,44 @@ class ChatbotAPIClient extends APIClient {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+        const lines = buffer.split('\n');
+
+        // Keep last incomplete line in buffer
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.slice(6));
+            try {
+              const jsonStr = line.slice(6);
+              if (!jsonStr.trim()) continue; // Skip empty data
 
-            if (data.type === 'response_chunk') {
-              completeResponse += data.chunk || '';
-            } else if (data.type === 'response_complete') {
-              completeResponse = data.response || completeResponse;
-              sources = data.documents || [];
+              const data = JSON.parse(jsonStr);
+
+              if (data.type === 'status') {
+                // Call onStatus callback for thinking steps
+                if (onStatus) {
+                  onStatus(data.message || '', data.stage || '');
+                }
+              } else if (data.type === 'response_chunk') {
+                const chunkText = data.chunk || '';
+                completeResponse += chunkText;
+                // Call onChunk callback for streaming updates
+                if (onChunk && chunkText) {
+                  onChunk(chunkText);
+                }
+              } else if (data.type === 'response_complete') {
+                completeResponse = data.response || completeResponse;
+                sources = data.documents || [];
+                // Call onComplete callback
+                if (onComplete) {
+                  onComplete(completeResponse, sources);
+                }
+              }
+            } catch (parseError) {
+              console.error('Failed to parse SSE line:', line, parseError);
+              // Skip invalid JSON, continue streaming
             }
           }
         }
@@ -281,6 +314,12 @@ class ChatbotAPIClient extends APIClient {
     return this.get<any>(`/api/v1/chat-history?session_id=${sessionId}`, true);
   }
 
+  async createConversation() {
+    const response = await this.post<any>('/api/v1/conversations', {}, true);
+    // Backend returns: { status: "success", data: { session_id: "..." } }
+    return response?.data || null;
+  }
+
   async getConversations() {
     const response = await this.get<any>('/api/v1/conversations', true);
     // Backend returns: { status: "success", data: [...] }
@@ -295,6 +334,10 @@ class ChatbotAPIClient extends APIClient {
 
   async deleteConversation(sessionId: string) {
     return this.delete<any>(`/api/v1/conversations/${sessionId}`, true);
+  }
+
+  async deleteAllConversations() {
+    return this.delete<any>('/api/v1/conversations', true);
   }
 
   async clearMemory(sessionId: string) {
