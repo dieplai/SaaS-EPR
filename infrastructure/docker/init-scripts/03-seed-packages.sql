@@ -7,14 +7,6 @@
 -- ========================================
 
 -- ========================================
--- CLEANUP: Soft delete old packages
--- ========================================
-UPDATE packages
-SET deleted_at = NOW(),
-    is_active = false
-WHERE deleted_at IS NULL;
-
--- ========================================
 -- PACKAGE 1: STARTER
 -- ========================================
 INSERT INTO packages (
