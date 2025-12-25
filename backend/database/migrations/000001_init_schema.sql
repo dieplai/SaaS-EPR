@@ -68,39 +68,33 @@ CREATE TABLE IF NOT EXISTS packages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
     -- Basic info
-    name VARCHAR(50) NOT NULL UNIQUE,
-    display_name VARCHAR(100) NOT NULL,
+    name VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
 
     -- Pricing
     price DECIMAL(10,2) NOT NULL,
-    currency VARCHAR(3) DEFAULT 'USD',
-    billing_period VARCHAR(20) DEFAULT 'monthly', -- monthly, yearly
 
-    -- Quotas
-    query_limit_daily INT NOT NULL,
-    query_limit_monthly INT,
+    -- GORM compatibility fields (used by domain layer)
+    token_limit BIGINT NOT NULL,
+    duration_days BIGINT NOT NULL,
 
     -- Features (JSON for flexibility)
-    allowed_models JSONB DEFAULT '["gpt-3.5-turbo"]'::jsonb,
-    features JSONB DEFAULT '{}'::jsonb,
-
-    -- Access control
-    api_access BOOLEAN DEFAULT FALSE,
-    priority_support BOOLEAN DEFAULT FALSE,
-    max_conversation_history INT DEFAULT 20,
+    features JSONB,
 
     -- Metadata
     is_active BOOLEAN DEFAULT TRUE,
-    is_featured BOOLEAN DEFAULT FALSE,
-    sort_order INT DEFAULT 0,
 
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP,
+
+    -- Additional fields for future extensibility
+    query_limit_daily INT NOT NULL DEFAULT 100
 );
 
 CREATE INDEX idx_packages_name ON packages(name);
 CREATE INDEX idx_packages_active ON packages(is_active) WHERE is_active = TRUE;
+CREATE INDEX idx_packages_deleted_at ON packages(deleted_at);
 
 COMMENT ON TABLE packages IS 'Subscription plans (Free, Basic, Pro, Business)';
 COMMENT ON COLUMN packages.features IS 'JSON object with package features';

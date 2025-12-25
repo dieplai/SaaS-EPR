@@ -117,37 +117,18 @@ func (r *PackageRepository) Count(ctx context.Context) (int64, error) {
 
 func (r *PackageRepository) toModel(pkg *packagedomain.Package) *PackageModel {
 	features := FeatureArray(pkg.GetFeatures())
-
-	// Map Duration to BillingPeriod
-	billingPeriod := "monthly"
-	if pkg.GetDuration().Days() >= 365 {
-		billingPeriod = "yearly"
-	}
-
-	// Map TokenLimit to QueryLimitDaily and QueryLimitMonthly
-	dailyLimit := pkg.GetTokenLimit().Value()
-	monthlyLimit := dailyLimit * 30
-
 	return &PackageModel{
-		ID:                     pkg.ID,
-		Name:                   pkg.GetName(),
-		DisplayName:            pkg.GetName(), // Use name as display name for now
-		Description:            pkg.GetDescription(),
-		Price:                  pkg.GetPrice().Amount(),
-		Currency:               "USD",
-		BillingPeriod:          billingPeriod,
-		QueryLimitDaily:        dailyLimit,
-		QueryLimitMonthly:      &monthlyLimit,
-		AllowedModels:          ModelArray{"gpt-3.5-turbo"},
-		Features:               features,
-		ApiAccess:              false,
-		PrioritySupport:        false,
-		MaxConversationHistory: 20,
-		IsActive:               pkg.IsActive(),
-		IsFeatured:             false,
-		SortOrder:              0,
-		CreatedAt:              pkg.CreatedAt,
-		UpdatedAt:              pkg.UpdatedAt,
+		ID:           pkg.ID,
+		Name:         pkg.GetName(),
+		Description:  pkg.GetDescription(),
+		Price:        pkg.GetPrice().Amount(),
+		TokenLimit:   pkg.GetTokenLimit().Value(),
+		DurationDays: pkg.GetDuration().Days(),
+		Features:     features,
+		IsActive:     pkg.IsActive(),
+		CreatedAt:    pkg.CreatedAt,
+		UpdatedAt:    pkg.UpdatedAt,
+		DeletedAt:    gorm.DeletedAt{Valid: pkg.DeletedAt != nil},
 	}
 }
 
@@ -157,18 +138,12 @@ func (r *PackageRepository) toDomain(model *PackageModel) (*packagedomain.Packag
 		return nil, err
 	}
 
-	// Map QueryLimitDaily to TokenLimit
-	tokenLimit, err := packagedomain.NewTokenLimit(model.QueryLimitDaily)
+	tokenLimit, err := packagedomain.NewTokenLimit(model.TokenLimit)
 	if err != nil {
 		return nil, err
 	}
 
-	// Map BillingPeriod to Duration (days)
-	durationDays := 30 // default monthly
-	if model.BillingPeriod == "yearly" {
-		durationDays = 365
-	}
-	duration, err := packagedomain.NewDuration(durationDays)
+	duration, err := packagedomain.NewDuration(model.DurationDays)
 	if err != nil {
 		return nil, err
 	}
@@ -187,6 +162,10 @@ func (r *PackageRepository) toDomain(model *PackageModel) (*packagedomain.Packag
 	pkg.ID = model.ID
 	pkg.CreatedAt = model.CreatedAt
 	pkg.UpdatedAt = model.UpdatedAt
+	if model.DeletedAt.Valid {
+		t := model.DeletedAt.Time
+		pkg.DeletedAt = &t
+	}
 
 	if len(model.Features) > 0 {
 		pkg.SetFeatures(model.Features)
