@@ -52,21 +52,27 @@ fi
 
 echo -e "${GREEN}OK: Production database found with $PROD_TABLE_COUNT tables${NC}"
 
-# Step 1: Dump production database
+# Step 1: Dump production database (EXCLUDE extension ownership)
 echo -e "${YELLOW}[1/4] Dumping production database${NC}"
+# Use --no-owner and filter out extension DROP/CREATE commands
+# Extensions are already installed in staging via db/setup.sh
 docker exec epr-postgres pg_dump \
   -U epr_production \
   -d epr_saas_production \
   --clean \
   --if-exists \
   --no-owner \
-  --no-acl > "$TEMP_BACKUP"
+  --no-acl \
+  | grep -v "DROP EXTENSION" \
+  | grep -v "CREATE EXTENSION" \
+  | grep -v "COMMENT ON EXTENSION" \
+  > "$TEMP_BACKUP"
 
 if [ $? -ne 0 ]; then
   echo -e "${RED}ERROR: Failed to dump production database${NC}"
   exit 1
 fi
-echo -e "${GREEN}OK: Production database dumped${NC}"
+echo -e "${GREEN}OK: Production database dumped (extensions excluded)${NC}"
 
 # Step 2: Drop staging database connections
 echo -e "${YELLOW}[2/4] Terminating staging database connections${NC}"
