@@ -27,14 +27,14 @@ echo -e "${YELLOW}Creating databases and users${NC}"
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
     -- Production database
     CREATE DATABASE epr_saas_production;
-    CREATE USER epr_prod WITH PASSWORD '$DB_PASSWORD';
-    GRANT ALL PRIVILEGES ON DATABASE epr_saas_production TO epr_prod;
+    CREATE USER epr_production WITH PASSWORD '$DB_PASSWORD';
+    GRANT ALL PRIVILEGES ON DATABASE epr_saas_production TO epr_production;
 
     -- Connect to production database and grant schema permissions
     \c epr_saas_production
-    GRANT ALL ON SCHEMA public TO epr_prod;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO epr_prod;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO epr_prod;
+    GRANT ALL ON SCHEMA public TO epr_production;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO epr_production;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO epr_production;
 
     -- Staging database
     \c postgres
@@ -54,6 +54,6 @@ echo -e "${GREEN}Database initialization completed${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "Created databases:"
-echo "  - epr_saas_production (user: epr_prod)"
+echo "  - epr_saas_production (user: epr_production)"
 echo "  - epr_saas_staging (user: epr_staging)"
 echo ""

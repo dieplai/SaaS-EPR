@@ -41,17 +41,17 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'epr_saas_production')
 -- Create production user if not exists, then ALWAYS update password
 DO \$\$
 BEGIN
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'epr_prod') THEN
-    CREATE USER epr_prod WITH PASSWORD '${POSTGRES_PASSWORD}';
+  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'epr_production') THEN
+    CREATE USER epr_production WITH PASSWORD '${POSTGRES_PASSWORD}';
   ELSE
     -- User exists, update password (sync with GitHub Secret)
-    ALTER USER epr_prod WITH PASSWORD '${POSTGRES_PASSWORD}';
+    ALTER USER epr_production WITH PASSWORD '${POSTGRES_PASSWORD}';
   END IF;
 END
 \$\$;
 
 -- Grant privileges
-GRANT ALL PRIVILEGES ON DATABASE epr_saas_production TO epr_prod;
+GRANT ALL PRIVILEGES ON DATABASE epr_saas_production TO epr_production;
 
 -- Create staging database if not exists
 SELECT 'CREATE DATABASE epr_saas_staging'
@@ -83,9 +83,9 @@ fi
 # Grant schema permissions for production
 echo -e "${YELLOW}Configuring production database permissions${NC}"
 docker exec -i epr-postgres psql -U postgres -d epr_saas_production <<EOF
-GRANT ALL ON SCHEMA public TO epr_prod;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO epr_prod;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO epr_prod;
+GRANT ALL ON SCHEMA public TO epr_production;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO epr_production;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO epr_production;
 EOF
 
 # Grant schema permissions for staging
@@ -103,7 +103,7 @@ STAGING_DB=$(docker exec epr-postgres psql -U postgres -t -c "SELECT 1 FROM pg_d
 
 if [ "$PROD_DB" = "1" ] && [ "$STAGING_DB" = "1" ]; then
   echo -e "${GREEN}OK: Database verification passed${NC}"
-  echo "  - epr_saas_production (user: epr_prod)"
+  echo "  - epr_saas_production (user: epr_production)"
   echo "  - epr_saas_staging (user: epr_staging)"
 else
   echo -e "${RED}ERROR: Database verification failed${NC}"

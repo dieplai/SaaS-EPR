@@ -41,7 +41,7 @@ if [ "$DB_EXISTS" != "1" ]; then
 fi
 
 # Check if production database has tables
-PROD_TABLE_COUNT=$(docker exec epr-postgres psql -U epr_prod -d epr_saas_production -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';" 2>/dev/null | xargs || echo "0")
+PROD_TABLE_COUNT=$(docker exec epr-postgres psql -U epr_production -d epr_saas_production -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';" 2>/dev/null | xargs || echo "0")
 
 if [ "$PROD_TABLE_COUNT" -eq 0 ]; then
   echo -e "${YELLOW}INFO: Production database is empty (no tables)${NC}"
@@ -55,7 +55,7 @@ echo -e "${GREEN}OK: Production database found with $PROD_TABLE_COUNT tables${NC
 # Step 1: Dump production database
 echo -e "${YELLOW}[1/4] Dumping production database${NC}"
 docker exec epr-postgres pg_dump \
-  -U epr_prod \
+  -U epr_production \
   -d epr_saas_production \
   --clean \
   --if-exists \

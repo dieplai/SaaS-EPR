@@ -35,7 +35,7 @@ fi
 # Backup database
 echo -e "${YELLOW}Creating database dump${NC}"
 docker exec epr-postgres pg_dump \
-  -U epr_prod \
+  -U epr_production \
   -d epr_saas_production \
   --clean \
   --if-exists \
