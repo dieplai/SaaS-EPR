@@ -12,6 +12,7 @@ import (
 
 	"github.com/epr-legal/epr-backend/internal/identity/application/command"
 	identityquery "github.com/epr-legal/epr-backend/internal/identity/application/query"
+	identityinfra "github.com/epr-legal/epr-backend/internal/identity/infrastructure/persistence/postgres"
 	"github.com/epr-legal/epr-backend/internal/identity/infrastructure/security"
 	identityhttp "github.com/epr-legal/epr-backend/internal/identity/presentation/http"
 	identityhandler "github.com/epr-legal/epr-backend/internal/identity/presentation/http/handler"
