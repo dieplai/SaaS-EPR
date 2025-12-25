@@ -105,24 +105,7 @@ CREATE INDEX idx_packages_active ON packages(is_active) WHERE is_active = TRUE;
 COMMENT ON TABLE packages IS 'Subscription plans (Free, Basic, Pro, Business)';
 COMMENT ON COLUMN packages.features IS 'JSON object with package features';
 
--- Seed initial packages
-INSERT INTO packages (name, display_name, description, price, billing_period, query_limit_daily, query_limit_monthly, allowed_models, features) VALUES
-('free', 'Free Trial', 'Dùng thử miễn phí với tính năng cơ bản', 0.00, 'monthly', 10, 300,
-    '["gpt-3.5-turbo"]'::jsonb,
-    '{"document_search": true, "conversation_history": 5, "support": "community"}'::jsonb),
-
-('basic', 'Basic', 'Gói cơ bản cho cá nhân và freelancer', 9.00, 'monthly', 100, 3000,
-    '["gpt-3.5-turbo"]'::jsonb,
-    '{"document_search": true, "conversation_history": 20, "support": "email", "response_time": "48h"}'::jsonb),
-
-('pro', 'Professional', 'Gói chuyên nghiệp cho doanh nghiệp nhỏ', 29.00, 'monthly', 1000, 30000,
-    '["gpt-3.5-turbo", "gpt-4o-mini"]'::jsonb,
-    '{"document_search": true, "conversation_history": 50, "support": "priority", "response_time": "24h", "api_access": true}'::jsonb),
-
-('business', 'Business', 'Gói doanh nghiệp cao cấp', 99.00, 'monthly', 999999, 999999,
-    '["gpt-3.5-turbo", "gpt-4o-mini", "gpt-4"]'::jsonb,
-    '{"document_search": true, "conversation_history": 100, "support": "dedicated", "response_time": "2h", "api_access": true, "custom_training": true}'::jsonb)
-ON CONFLICT (name) DO NOTHING;
+-- NOTE: Data seeding moved to: infrastructure/scripts/seed-database.sh
 
 -- ============================================
 -- 4. SUBSCRIPTIONS
