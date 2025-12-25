@@ -256,75 +256,104 @@ func createDefaultSystemSettings(db *gorm.DB) error {
 func createDefaultPackages(db *gorm.DB) error {
 	packages := []subscriptioninfra.PackageModel{
 		{
-			ID:           uuid.New(),
-			Name:         "Free",
-			Description:  "Free tier for new users",
-			Price:        0, // Free package
-			TokenLimit:   100, // Will sync with free_account_token_limit setting
-			DurationDays: 30,
-			Features:     subscriptioninfra.FeatureArray{"Basic AI Chat", "Limited tokens"},
-			IsActive:     false, // Hidden from pricing page, only for auto-assignment
+			ID:                 uuid.New(),
+			Name:               "free",
+			DisplayName:        "Free",
+			Description:        "Free tier for new users",
+			Price:              0,
+			Currency:           "USD",
+			BillingPeriod:      "monthly",
+			QueryLimitDaily:    100,
+			QueryLimitMonthly:  nil,
+			AllowedModels:      subscriptioninfra.ModelArray{"gpt-3.5-turbo"},
+			Features:           subscriptioninfra.FeatureArray{"Basic AI Chat", "Limited queries"},
+			ApiAccess:          false,
+			PrioritySupport:    false,
+			MaxConversationHistory: 20,
+			IsActive:           false, // Hidden from pricing page
+			IsFeatured:         false,
+			SortOrder:          0,
 		},
 		{
-			ID:           uuid.New(),
-			Name:         "Starter",
-			Description:  "Perfect for individuals and small teams",
-			Price:        9.99, // USD
-			TokenLimit:   1000,
-			DurationDays: 30,
-			Features:     subscriptioninfra.FeatureArray{"AI Chat", "Document Analysis", "1000 tokens/month"},
-			IsActive:     true,
+			ID:                 uuid.New(),
+			Name:               "starter",
+			DisplayName:        "Starter",
+			Description:        "Perfect for individuals and small teams",
+			Price:              9.99,
+			Currency:           "USD",
+			BillingPeriod:      "monthly",
+			QueryLimitDaily:    50,
+			QueryLimitMonthly:  intPtr(1000),
+			AllowedModels:      subscriptioninfra.ModelArray{"gpt-3.5-turbo", "gpt-4"},
+			Features:           subscriptioninfra.FeatureArray{"AI Chat", "Document Analysis", "1000 queries/month"},
+			ApiAccess:          false,
+			PrioritySupport:    false,
+			MaxConversationHistory: 50,
+			IsActive:           true,
+			IsFeatured:         false,
+			SortOrder:          1,
 		},
 		{
-			ID:           uuid.New(),
-			Name:         "Pro",
-			Description:  "For growing businesses",
-			Price:        29.99, // USD
-			TokenLimit:   5000,
-			DurationDays: 30,
-			Features:     subscriptioninfra.FeatureArray{"AI Chat", "Document Analysis", "Priority Support", "5000 tokens/month"},
-			IsActive:     true,
+			ID:                 uuid.New(),
+			Name:               "pro",
+			DisplayName:        "Pro",
+			Description:        "For growing businesses",
+			Price:              29.99,
+			Currency:           "USD",
+			BillingPeriod:      "monthly",
+			QueryLimitDaily:    200,
+			QueryLimitMonthly:  intPtr(5000),
+			AllowedModels:      subscriptioninfra.ModelArray{"gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"},
+			Features:           subscriptioninfra.FeatureArray{"AI Chat", "Document Analysis", "Priority Support", "5000 queries/month"},
+			ApiAccess:          true,
+			PrioritySupport:    true,
+			MaxConversationHistory: 100,
+			IsActive:           true,
+			IsFeatured:         true,
+			SortOrder:          2,
 		},
 		{
-			ID:           uuid.New(),
-			Name:         "Enterprise",
-			Description:  "For large organizations with custom needs",
-			Price:        99.99, // USD
-			TokenLimit:   20000,
-			DurationDays: 30,
-			Features:     subscriptioninfra.FeatureArray{"AI Chat", "Document Analysis", "Priority Support", "Custom Integration", "20000 tokens/month"},
-			IsActive:     true,
+			ID:                 uuid.New(),
+			Name:               "enterprise",
+			DisplayName:        "Enterprise",
+			Description:        "For large organizations with custom needs",
+			Price:              99.99,
+			Currency:           "USD",
+			BillingPeriod:      "monthly",
+			QueryLimitDaily:    1000,
+			QueryLimitMonthly:  intPtr(20000),
+			AllowedModels:      subscriptioninfra.ModelArray{"gpt-3.5-turbo", "gpt-4", "gpt-4-turbo", "gpt-4-32k"},
+			Features:           subscriptioninfra.FeatureArray{"AI Chat", "Document Analysis", "Priority Support", "Custom Integration", "20000 queries/month"},
+			ApiAccess:          true,
+			PrioritySupport:    true,
+			MaxConversationHistory: 200,
+			IsActive:           true,
+			IsFeatured:         false,
+			SortOrder:          3,
 		},
 	}
 
 	for _, pkg := range packages {
 		var existing subscriptioninfra.PackageModel
-		// Use Unscoped to check for both deleted and non-deleted records
-		err := db.Unscoped().Where("name = ?", pkg.Name).First(&existing).Error
+		// Check if package exists
+		err := db.Where("name = ?", pkg.Name).First(&existing).Error
 
 		if err == gorm.ErrRecordNotFound {
-			// Package doesn't exist at all, create it
+			// Package doesn't exist, create it
 			if err := db.Create(&pkg).Error; err != nil {
 				return err
 			}
 		} else if err != nil {
 			// Some other error occurred
 			return err
-		} else if existing.DeletedAt.Valid {
-			// Package exists but is soft-deleted, restore and update it
-			existing.DeletedAt = gorm.DeletedAt{}
-			existing.Description = pkg.Description
-			existing.Price = pkg.Price
-			existing.TokenLimit = pkg.TokenLimit
-			existing.DurationDays = pkg.DurationDays
-			existing.Features = pkg.Features
-			existing.IsActive = pkg.IsActive
-			if err := db.Unscoped().Save(&existing).Error; err != nil {
-				return err
-			}
 		}
-		// If package exists and is not deleted, do nothing (keep existing data)
+		// If package exists, do nothing (keep existing data)
 	}
 
 	return nil
+}
+
+// Helper function to create pointer to int
+func intPtr(i int) *int {
+	return &i
 }
