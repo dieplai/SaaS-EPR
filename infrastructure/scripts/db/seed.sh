@@ -39,7 +39,7 @@ else
   DB_USER="epr_staging"
 fi
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SEED_DIR="$PROJECT_ROOT/backend/database/seeds"
 
 echo -e "${BLUE}========================================${NC}"
