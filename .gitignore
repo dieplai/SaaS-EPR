@@ -110,6 +110,10 @@ logs/
 
 # Database backups
 backups/
+# IMPORTANT: Allow migration and seed files (exceptions to *.sql rule below)
+!backend/database/migrations/*.sql
+!backend/database/seeds/*.sql
+# Ignore all other SQL files (backups, dumps, etc.)
 *.sql
 *.sql.gz
 

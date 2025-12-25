@@ -52,15 +52,15 @@ REQUIRED_SECRETS=(
 )
 
 # Pre-flight checks
-echo -e "${YELLOW}[1/7] Running pre-flight checks${NC}"
-if "$PROJECT_ROOT/infrastructure/scripts/preflight-check.sh" "$ENV"; then
+echo -e "${YELLOW}[1/11] Running pre-flight checks${NC}"
+if "$PROJECT_ROOT/infrastructure/scripts/checks/preflight.sh" "$ENV"; then
   echo -e "${GREEN}OK: Pre-flight checks passed${NC}"
 else
   echo -e "${RED}ERROR: Pre-flight checks failed${NC}"
   exit 1
 fi
 
-echo -e "${YELLOW}[2/7] Validating environment secrets${NC}"
+echo -e "${YELLOW}[2/11] Validating environment secrets${NC}"
 for secret in "${REQUIRED_SECRETS[@]}"; do
   if [ -z "${!secret}" ]; then
     echo -e "${RED}ERROR: Required secret $secret is not set${NC}"
@@ -70,7 +70,7 @@ done
 echo -e "${GREEN}OK: All required secrets validated${NC}"
 
 # Generate .env from template
-echo -e "${YELLOW}[3/7] Generating environment configuration${NC}"
+echo -e "${YELLOW}[3/11] Generating environment configuration${NC}"
 envsubst < "$TEMPLATE_FILE" > "$ENV_FILE"
 echo -e "${GREEN}OK: Environment file generated at $ENV_FILE${NC}"
 
@@ -78,7 +78,7 @@ echo -e "${GREEN}OK: Environment file generated at $ENV_FILE${NC}"
 export DEPLOY_ENV="$ENV"
 
 # Pull latest images
-echo -e "${YELLOW}[4/8] Pulling Docker images from registry${NC}"
+echo -e "${YELLOW}[4/11] Pulling Docker images from registry${NC}"
 cd "$PROJECT_ROOT"
 
 # If GIT_SHA is provided (from CI/CD), pull specific SHA-tagged images
@@ -105,7 +105,7 @@ fi
 echo -e "${GREEN}OK: Images pulled successfully${NC}"
 
 # Ensure infrastructure (postgres/redis) exists
-echo -e "${YELLOW}[5/9] Ensuring infrastructure services${NC}"
+echo -e "${YELLOW}[5/11] Ensuring infrastructure services${NC}"
 if ! docker ps --format '{{.Names}}' | grep -q "^epr-postgres$"; then
   echo -e "${YELLOW}Infrastructure not found, deploying postgres and redis...${NC}"
   docker compose -f docker-compose.infrastructure.yml up -d
@@ -116,8 +116,8 @@ else
 fi
 
 # Database setup BEFORE deploying services (critical for password sync)
-echo -e "${YELLOW}[6/9] Setting up databases${NC}"
-if "$PROJECT_ROOT/infrastructure/scripts/setup-database.sh"; then
+echo -e "${YELLOW}[6/11] Setting up databases${NC}"
+if "$PROJECT_ROOT/infrastructure/scripts/db/setup.sh"; then
   echo -e "${GREEN}OK: Database setup completed${NC}"
 else
   echo -e "${RED}ERROR: Database setup failed${NC}"
@@ -125,7 +125,7 @@ else
 fi
 
 # Deploy services (backend will connect with updated password)
-echo -e "${YELLOW}[7/9] Deploying application services${NC}"
+echo -e "${YELLOW}[7/11] Deploying application services${NC}"
 
 # Cleanup old containers to prevent name conflicts
 echo -e "${YELLOW}Cleaning up old containers (if any)${NC}"
@@ -156,32 +156,41 @@ docker restart $BACKEND_CONTAINER
 sleep 3
 echo -e "${GREEN}OK: Backend restarted${NC}"
 
-# Run database migrations
-echo -e "${YELLOW}[8/10] Running database migrations${NC}"
-if "$PROJECT_ROOT/infrastructure/scripts/run-migrations.sh" "$ENV"; then
+# Run database migrations using golang-migrate
+echo -e "${YELLOW}[8/11] Running database migrations (golang-migrate)${NC}"
+if "$PROJECT_ROOT/infrastructure/scripts/db/migrate.sh" "$ENV" up; then
   echo -e "${GREEN}OK: Database migrations completed${NC}"
 else
-  echo -e "${RED}ERROR: Database migrations failed${NC}"
+  echo -e "${RED}ERROR: Database migrations failed - rolling back${NC}"
+  "$PROJECT_ROOT/infrastructure/scripts/ops/rollback.sh" "$ENV"
   exit 1
 fi
 
+# Seed initial data (idempotent)
+echo -e "${YELLOW}[9/11] Seeding initial data${NC}"
+if "$PROJECT_ROOT/infrastructure/scripts/db/seed.sh" "$ENV"; then
+  echo -e "${GREEN}OK: Database seeding completed${NC}"
+else
+  echo -e "${YELLOW}WARNING: Seeding failed (non-critical, continuing...)${NC}"
+fi
+
 # Health checks
-echo -e "${YELLOW}[9/10] Running health checks${NC}"
-if "$PROJECT_ROOT/infrastructure/scripts/health-check.sh" "$ENV"; then
+echo -e "${YELLOW}[10/11] Running health checks${NC}"
+if "$PROJECT_ROOT/infrastructure/scripts/checks/health.sh" "$ENV"; then
   echo -e "${GREEN}OK: Health checks passed${NC}"
 else
   echo -e "${RED}ERROR: Health checks failed - rolling back${NC}"
-  "$PROJECT_ROOT/infrastructure/scripts/rollback.sh" "$ENV"
+  "$PROJECT_ROOT/infrastructure/scripts/ops/rollback.sh" "$ENV"
   exit 1
 fi
 
 # Smoke tests
-echo -e "${YELLOW}[10/10] Running smoke tests${NC}"
-if "$PROJECT_ROOT/infrastructure/scripts/smoke-test.sh" "$ENV"; then
+echo -e "${YELLOW}[11/11] Running smoke tests${NC}"
+if "$PROJECT_ROOT/infrastructure/scripts/checks/smoke.sh" "$ENV"; then
   echo -e "${GREEN}OK: Smoke tests passed${NC}"
 else
   echo -e "${RED}ERROR: Smoke tests failed - rolling back${NC}"
-  "$PROJECT_ROOT/infrastructure/scripts/rollback.sh" "$ENV"
+  "$PROJECT_ROOT/infrastructure/scripts/ops/rollback.sh" "$ENV"
   exit 1
 fi
 

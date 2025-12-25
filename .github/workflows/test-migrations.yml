@@ -1,0 +1,172 @@
+name: Test Migrations
+
+on:
+  pull_request:
+    paths:
+      - 'backend/database/migrations/**'
+      - 'backend/database/seeds/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/database/migrations/**'
+      - 'backend/database/seeds/**'
+
+jobs:
+  test-migrations:
+    name: Test Database Migrations
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: epr_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install golang-migrate
+        run: |
+          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-amd64.tar.gz | tar xvz
+          sudo mv migrate /usr/local/bin/
+          sudo chmod +x /usr/local/bin/migrate
+
+      - name: Test migration UP
+        run: |
+          migrate -path backend/database/migrations \
+                  -database "postgresql://postgres:test_password@localhost:5432/epr_test?sslmode=disable" \
+                  up
+          echo "✓ Migration UP succeeded"
+
+      - name: Verify schema
+        run: |
+          TABLE_COUNT=$(psql postgresql://postgres:test_password@localhost:5432/epr_test \
+                       -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';")
+          echo "Tables created: $TABLE_COUNT"
+
+          if [ "$TABLE_COUNT" -lt 13 ]; then
+            echo "ERROR: Expected at least 13 tables, got $TABLE_COUNT"
+            exit 1
+          fi
+          echo "✓ Schema verification passed"
+
+      - name: Verify migration version
+        run: |
+          VERSION=$(migrate -path backend/database/migrations \
+                    -database "postgresql://postgres:test_password@localhost:5432/epr_test?sslmode=disable" \
+                    version 2>&1 | tail -1)
+          echo "Migration version: $VERSION"
+
+          if echo "$VERSION" | grep -q "dirty"; then
+            echo "ERROR: Migration is in dirty state"
+            exit 1
+          fi
+          echo "✓ Migration version clean"
+
+      - name: Test seed files
+        run: |
+          # Test package seeding
+          psql postgresql://postgres:test_password@localhost:5432/epr_test \
+               -f backend/database/seeds/001_packages.sql
+
+          PACKAGE_COUNT=$(psql postgresql://postgres:test_password@localhost:5432/epr_test \
+                         -t -c "SELECT COUNT(*) FROM packages WHERE deleted_at IS NULL;")
+          echo "Packages seeded: $PACKAGE_COUNT"
+
+          if [ "$PACKAGE_COUNT" -ne 3 ]; then
+            echo "ERROR: Expected 3 packages, got $PACKAGE_COUNT"
+            exit 1
+          fi
+          echo "✓ Package seeding passed"
+
+          # Test admin user seeding
+          psql postgresql://postgres:test_password@localhost:5432/epr_test \
+               -f backend/database/seeds/002_admin_user.sql
+
+          ADMIN_COUNT=$(psql postgresql://postgres:test_password@localhost:5432/epr_test \
+                       -t -c "SELECT COUNT(*) FROM users WHERE role = 'admin';")
+          echo "Admin users seeded: $ADMIN_COUNT"
+
+          if [ "$ADMIN_COUNT" -ne 1 ]; then
+            echo "ERROR: Expected 1 admin user, got $ADMIN_COUNT"
+            exit 1
+          fi
+          echo "✓ Admin user seeding passed"
+
+      - name: Test migration DOWN (rollback)
+        run: |
+          migrate -path backend/database/migrations \
+                  -database "postgresql://postgres:test_password@localhost:5432/epr_test?sslmode=disable" \
+                  down 1
+
+          TABLE_COUNT=$(psql postgresql://postgres:test_password@localhost:5432/epr_test \
+                       -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';")
+          echo "Tables after rollback: $TABLE_COUNT"
+
+          if [ "$TABLE_COUNT" -gt 1 ]; then
+            echo "ERROR: Expected tables to be dropped, got $TABLE_COUNT"
+            exit 1
+          fi
+          echo "✓ Migration DOWN (rollback) succeeded"
+
+      - name: Test migration re-apply (idempotency)
+        run: |
+          migrate -path backend/database/migrations \
+                  -database "postgresql://postgres:test_password@localhost:5432/epr_test?sslmode=disable" \
+                  up
+
+          VERSION=$(migrate -path backend/database/migrations \
+                    -database "postgresql://postgres:test_password@localhost:5432/epr_test?sslmode=disable" \
+                    version 2>&1 | tail -1)
+          echo "Migration version after re-apply: $VERSION"
+
+          if echo "$VERSION" | grep -q "dirty"; then
+            echo "ERROR: Migration is in dirty state after re-apply"
+            exit 1
+          fi
+          echo "✓ Migration re-apply (idempotency) succeeded"
+
+      - name: Test seed idempotency
+        run: |
+          # Run seeds twice to test idempotency
+          psql postgresql://postgres:test_password@localhost:5432/epr_test \
+               -f backend/database/seeds/001_packages.sql
+          psql postgresql://postgres:test_password@localhost:5432/epr_test \
+               -f backend/database/seeds/001_packages.sql
+
+          PACKAGE_COUNT=$(psql postgresql://postgres:test_password@localhost:5432/epr_test \
+                         -t -c "SELECT COUNT(*) FROM packages WHERE deleted_at IS NULL;")
+
+          if [ "$PACKAGE_COUNT" -ne 3 ]; then
+            echo "ERROR: Seed idempotency failed - expected 3 packages, got $PACKAGE_COUNT"
+            exit 1
+          fi
+          echo "✓ Seed idempotency test passed"
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "========================================="
+          echo "✓ All migration tests passed"
+          echo "========================================="
+          echo "Tests completed:"
+          echo "  ✓ Migration UP"
+          echo "  ✓ Schema verification (13+ tables)"
+          echo "  ✓ Migration version clean"
+          echo "  ✓ Package seeding (3 packages)"
+          echo "  ✓ Admin user seeding (1 user)"
+          echo "  ✓ Migration DOWN (rollback)"
+          echo "  ✓ Migration re-apply (idempotency)"
+          echo "  ✓ Seed idempotency"
+          echo "========================================="

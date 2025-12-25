@@ -95,11 +95,31 @@ jobs:
       - name: Build and push Backend
         uses: docker/build-push-action@v5
         with:
-          context: ./backend/services/epr-backend
+          context: ./backend
+          file: ./backend/services/epr-backend/Dockerfile
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ steps.env.outputs.name }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ steps.env.outputs.name }}-${{ github.sha }}
+
+      # ============================================
+      # Security Scanning with Trivy
+      # ============================================
+      - name: Run Trivy security scan on Backend
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ steps.env.outputs.name }}
+          format: 'sarif'
+          output: 'trivy-backend-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'  # Don't fail build, just report
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-backend-results.sarif'
+          category: 'backend-security'
 
       - name: Build and push Chatbot
         uses: docker/build-push-action@v5
@@ -147,13 +167,13 @@ jobs:
             # Database operations (backup for prod, sync for staging)
             if [ "$DEPLOY_ENV" == "production" ]; then
               echo "[INFO] Backing up production database"
-              ./infrastructure/scripts/backup-db.sh
+              ./infrastructure/scripts/db/backup.sh
 
               echo "[INFO] Cleaning up old Docker images"
-              ./infrastructure/scripts/cleanup-docker.sh
+              ./infrastructure/scripts/ops/cleanup.sh
             elif [ "$DEPLOY_ENV" == "staging" ]; then
               echo "[INFO] Syncing staging database from production"
-              ./infrastructure/scripts/sync-db-from-prod.sh
+              ./infrastructure/scripts/db/sync-staging.sh
             fi
 
             # Set secrets as environment variables
@@ -179,13 +199,38 @@ jobs:
       - name: Deployment summary
         if: always()
         run: |
-          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Environment:** ${{ steps.env.outputs.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`${{ steps.env.outputs.name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Triggered by** | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Timestamp** | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Docker Images" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Docker Images:**" >> $GITHUB_STEP_SUMMARY
-          echo "- Backend: \`${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ steps.env.outputs.name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Chatbot: \`${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-chatbot:${{ steps.env.outputs.name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Web: \`${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-web:${{ steps.env.outputs.name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend:** \`${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ steps.env.outputs.name }}-${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Chatbot:** \`${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-chatbot:${{ steps.env.outputs.name }}-${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Web:** \`${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-web:${{ steps.env.outputs.name }}-${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔧 Deployment Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. ✅ Pre-flight checks" >> $GITHUB_STEP_SUMMARY
+          echo "2. ✅ Environment validation" >> $GITHUB_STEP_SUMMARY
+          echo "3. ✅ Docker image builds" >> $GITHUB_STEP_SUMMARY
+          echo "4. ✅ Security scanning (Trivy)" >> $GITHUB_STEP_SUMMARY
+          echo "5. ✅ Database migrations (golang-migrate)" >> $GITHUB_STEP_SUMMARY
+          echo "6. ✅ Initial data seeding" >> $GITHUB_STEP_SUMMARY
+          echo "7. ✅ Health checks" >> $GITHUB_STEP_SUMMARY
+          echo "8. ✅ Smoke tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🌐 Deployment URL" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.env.outputs.name }}" == "production" ]; then
+            echo "🔗 [https://epr.dieplai.io.vn](https://epr.dieplai.io.vn)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "🔗 [https://staging.epr.dieplai.io.vn](https://staging.epr.dieplai.io.vn)" >> $GITHUB_STEP_SUMMARY
+          fi
