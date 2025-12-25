@@ -155,7 +155,7 @@ const Navbar = () => {
             ) : (
               <>
                 <Link to="/login">
-                  <Button variant="ghost" className="text-foreground hover:text-primary">
+                  <Button variant="ghost" className="text-foreground hover:bg-primary hover:text-black">
                     Login
                   </Button>
                 </Link>
@@ -236,7 +236,7 @@ const Navbar = () => {
                 ) : (
                   <>
                     <Link to="/login" onClick={() => setIsMobileMenuOpen(false)}>
-                      <Button variant="ghost" className="w-full">
+                      <Button variant="ghost" className="w-full hover:bg-primary hover:text-black">
                         Login
                       </Button>
                     </Link>

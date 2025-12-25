@@ -1,36 +1,109 @@
 # ============================================
-# EPR SaaS - PRODUCTION ENVIRONMENT OVERRIDE
+# EPR SaaS - PRODUCTION ENVIRONMENT
 # ============================================
-# Production-specific configuration
+# Production deployment with pre-built GHCR images
+# Ports: Backend=8101, Chatbot=8100, Frontend=3100
 # Runs alongside staging with different ports
-# Usage: docker-compose -f docker-compose.base.yml -f docker-compose.prod.yml -f docker-compose.production.yml up
-# ============================================
-# NOTE: Infrastructure (postgres/redis) is NOT included in base.yml
-#       They are managed separately via docker-compose.infrastructure.yml
+#
+# Prerequisites:
+#   - Infrastructure must be running (postgres, redis)
+#     docker compose -f infrastructure/docker-compose.infrastructure.yml up -d
+#
+# Usage:
+#   docker compose -f docker-compose.production.yml up -d
+#
+# With monitoring:
+#   docker compose -f docker-compose.production.yml \
+#                  -f infrastructure/docker-compose.monitoring.yml up -d
 # ============================================
 
 services:
   # ============================================
-  # BACKEND - Production ports & name
+  # BACKEND SERVICE (Go - DDD Structure)
   # ============================================
   epr-backend:
+    image: ghcr.io/dieplai/saas-epr-backend:production
     container_name: epr-backend-prod
     ports:
-      - "8101:8001"  # Host:Container
+      - "8101:8001"
+    environment:
+      - PORT=8001
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-epr_saas}?sslmode=disable
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_EXPIRATION_MINUTES=${JWT_ACCESS_EXPIRATION_MINUTES:-15}
+      - JWT_REFRESH_EXPIRATION_HOURS=${JWT_REFRESH_EXPIRATION_HOURS:-168}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-https://epr.dieplai.io.vn}
+    networks:
+      - epr-network
+    restart: unless-stopped
 
   # ============================================
-  # CHATBOT - Production ports & name
+  # AI CHATBOT API (Python - RAG + LangChain)
   # ============================================
   ai-chatbot-api:
+    image: ghcr.io/dieplai/saas-epr-chatbot:production
     container_name: epr-ai-chatbot-prod
     ports:
-      - "8100:8000"  # Host:Container
+      - "8100:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - USE_QDRANT_CLOUD=${USE_QDRANT_CLOUD:-false}
+      - QDRANT_CLOUD_URL=${QDRANT_CLOUD_URL:-}
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://epr.dieplai.io.vn}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-epr_saas}?sslmode=disable
+      - REDIS_URL=${REDIS_URL}
+      - EPR_BACKEND_URL=http://epr-backend-prod:8001
+      - JWT_SECRET=${JWT_SECRET}
+    volumes:
+      - chatbot_data_prod:/app/qdrant_faq_db
+    networks:
+      - epr-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    command: ["uvicorn", "fastapi_server:app", "--host", "0.0.0.0", "--port", "8000"]
 
   # ============================================
-  # FRONTEND - Production ports & name
+  # FRONTEND WEB (React + Vite)
   # ============================================
   web-frontend:
+    image: ghcr.io/dieplai/saas-epr-web:production
     container_name: epr-web-frontend-prod
     ports:
-      - "3100:3000"  # Host:Container
-    # Note: VITE_ environment vars are baked into image at build time, not runtime
+      - "3100:3000"
+    networks:
+      - epr-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  epr-network:
+    external: true
+    name: epr-network
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  chatbot_data_prod:
+    name: epr_chatbot_data_prod

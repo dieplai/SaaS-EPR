@@ -1,4 +1,17 @@
-# NGINX Native Setup - Production Infrastructure
+# NGINX Configuration - EPR SaaS Platform
+
+## 📁 Files in this Directory
+
+```
+infrastructure/nginx/
+├── epr-staging.conf          # ✅ Staging config (self-contained)
+├── epr-production.conf       # ✅ Production config (self-contained)
+├── sites-available/          # ⚠️ OLD - deprecated, use files above
+└── README.md                 # This file
+```
+
+**✅ Use:** `epr-staging.conf` and `epr-production.conf` (new, self-contained)
+**⚠️ Avoid:** `sites-available/` (old structure)
 
 ## Architecture
 
@@ -7,8 +20,8 @@ VPS (103.47.226.171)
 │
 ├─ NGINX Native (/etc/nginx/)           # Entry point
 │  ├─ sites-available/
-│  │  ├─ staging.epr.dieplai.io.vn     # Staging config
-│  │  └─ epr.dieplai.io.vn             # Production config
+│  │  ├─ staging.epr.dieplai.io.vn     # Copy from epr-staging.conf
+│  │  └─ epr.dieplai.io.vn             # Copy from epr-production.conf
 │  └─ sites-enabled/                    # Active sites (symlinks)
 │
 ├─ Certbot Native (/etc/letsencrypt/)   # SSL certificates
@@ -29,29 +42,48 @@ apt install nginx certbot python3-certbot-nginx -y
 ```
 
 ### 2. Deploy NGINX configs
-NGINX configs are versioned in Git at `infrastructure/nginx/sites-available/`.
+
+**✅ NEW METHOD (Recommended):**
+
+NGINX configs are now self-contained in:
+- `infrastructure/nginx/epr-staging.conf`
+- `infrastructure/nginx/epr-production.conf`
 
 **Copy to VPS:**
 ```bash
 cd /opt/epr-saas
 
 # Staging
-cp infrastructure/nginx/sites-available/staging.epr.dieplai.io.vn \
-   /etc/nginx/sites-available/
+sudo cp infrastructure/nginx/epr-staging.conf \
+   /etc/nginx/sites-available/staging.epr.dieplai.io.vn
 
 # Production
-cp infrastructure/nginx/sites-available/epr.dieplai.io.vn \
-   /etc/nginx/sites-available/
+sudo cp infrastructure/nginx/epr-production.conf \
+   /etc/nginx/sites-available/epr.dieplai.io.vn
 
 # Enable sites
-ln -sf /etc/nginx/sites-available/staging.epr.dieplai.io.vn /etc/nginx/sites-enabled/
-ln -sf /etc/nginx/sites-available/epr.dieplai.io.vn /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/staging.epr.dieplai.io.vn /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/epr.dieplai.io.vn /etc/nginx/sites-enabled/
 
 # Remove default
-rm -f /etc/nginx/sites-enabled/default
+sudo rm -f /etc/nginx/sites-enabled/default
 
 # Test and reload
-nginx -t && systemctl reload nginx
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**OR use SCP from local machine:**
+```bash
+# From your local machine
+scp infrastructure/nginx/epr-staging.conf user@103.47.226.171:/tmp/
+scp infrastructure/nginx/epr-production.conf user@103.47.226.171:/tmp/
+
+# Then on VPS
+sudo mv /tmp/epr-staging.conf /etc/nginx/sites-available/staging.epr.dieplai.io.vn
+sudo mv /tmp/epr-production.conf /etc/nginx/sites-available/epr.dieplai.io.vn
+sudo ln -sf /etc/nginx/sites-available/staging.epr.dieplai.io.vn /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/epr.dieplai.io.vn /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
 ### 3. Get SSL certificates
@@ -110,6 +142,26 @@ git push origin main  # Triggers GitHub Actions
 ✅ **SSL Management:** Certbot integration
 ✅ **Industry Standard:** Standard DevOps practice
 ✅ **Logs:** `/var/log/nginx/`
+✅ **Mobile Ready:** HTTPS + WebSocket support for mobile apps
+
+## 📱 Mobile App Support
+
+The configs support Flutter/React Native apps out of the box:
+
+### Configuration
+```dart
+// mobile/lib/core/config/api_config.dart
+Environment.staging    → https://staging.epr.dieplai.io.vn
+Environment.production → https://epr.dieplai.io.vn
+```
+
+### Features
+- ✅ HTTPS with valid SSL certificates
+- ✅ WebSocket support (`/chat/ws`)
+- ✅ Server-sent events (`/chat/stream`)
+- ✅ CORS handled at application level (backend/chatbot)
+
+See `mobile/lib/core/api/README.md` for mobile integration guide.
 
 ## Adding New Projects
 
