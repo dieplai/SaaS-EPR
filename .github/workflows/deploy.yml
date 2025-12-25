@@ -69,13 +69,13 @@ jobs:
       - name: Set environment URLs
         id: urls
         run: |
+          # Use relative URLs for both staging and production
+          # Nginx will handle routing correctly
+          echo "api_url=" >> $GITHUB_OUTPUT
+          echo "chatbot_url=/chat" >> $GITHUB_OUTPUT
           if [ "${{ steps.env.outputs.name }}" == "production" ]; then
-            echo "api_url=https://epr.dieplai.io.vn/api" >> $GITHUB_OUTPUT
-            echo "chatbot_url=https://epr.dieplai.io.vn" >> $GITHUB_OUTPUT
             echo "app_url=https://epr.dieplai.io.vn" >> $GITHUB_OUTPUT
           else
-            echo "api_url=https://staging.epr.dieplai.io.vn/api" >> $GITHUB_OUTPUT
-            echo "chatbot_url=https://staging.epr.dieplai.io.vn" >> $GITHUB_OUTPUT
             echo "app_url=https://staging.epr.dieplai.io.vn" >> $GITHUB_OUTPUT
           fi
 
@@ -84,8 +84,8 @@ jobs:
           echo "========================================="
           echo "🔧 Build Configuration for ${{ steps.env.outputs.name }}"
           echo "========================================="
-          echo "API URL: ${{ steps.urls.outputs.api_url }}"
-          echo "Chatbot URL: ${{ steps.urls.outputs.chatbot_url }}"
+          echo "API URL: '${{ steps.urls.outputs.api_url }}' (empty = relative)"
+          echo "Chatbot URL: '${{ steps.urls.outputs.chatbot_url }}'"
           echo "App URL: ${{ steps.urls.outputs.app_url }}"
           echo "========================================="
 
@@ -117,9 +117,8 @@ jobs:
           push: true
           no-cache: true
           build-args: |
-            NEXT_PUBLIC_BROWSER_API_URL=${{ steps.urls.outputs.api_url }}
-            NEXT_PUBLIC_BROWSER_CHATBOT_URL=${{ steps.urls.outputs.chatbot_url }}
-            NEXT_PUBLIC_APP_URL=${{ steps.urls.outputs.app_url }}
+            VITE_API_BASE_URL=${{ steps.urls.outputs.api_url }}
+            VITE_CHATBOT_API_URL=${{ steps.urls.outputs.chatbot_url }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-web:${{ steps.env.outputs.name }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-web:${{ steps.env.outputs.name }}-${{ github.sha }}
