@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS packages (
     price DECIMAL(10,2) NOT NULL,
     token_limit BIGINT NOT NULL,
     duration_days BIGINT NOT NULL,
-    features JSONB,
+    features JSONB DEFAULT '[]'::jsonb,  -- MUST be array, not object
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
