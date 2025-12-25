@@ -66,38 +66,25 @@ COMMENT ON TABLE refresh_tokens IS 'JWT refresh tokens for authentication';
 
 CREATE TABLE IF NOT EXISTS packages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-
-    -- Basic info
     name VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
-
-    -- Pricing
     price DECIMAL(10,2) NOT NULL,
-
-    -- GORM compatibility fields (used by domain layer)
     token_limit BIGINT NOT NULL,
     duration_days BIGINT NOT NULL,
-
-    -- Features (JSON for flexibility)
     features JSONB,
-
-    -- Metadata
     is_active BOOLEAN DEFAULT TRUE,
-
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP,
-
-    -- Additional fields for future extensibility
-    query_limit_daily INT NOT NULL DEFAULT 100
+    query_limit_daily INTEGER NOT NULL DEFAULT 100
 );
 
 CREATE INDEX idx_packages_name ON packages(name);
 CREATE INDEX idx_packages_active ON packages(is_active) WHERE is_active = TRUE;
 CREATE INDEX idx_packages_deleted_at ON packages(deleted_at);
 
-COMMENT ON TABLE packages IS 'Subscription plans (Free, Basic, Pro, Business)';
-COMMENT ON COLUMN packages.features IS 'JSON object with package features';
+COMMENT ON TABLE packages IS 'Subscription plans (Free, Starter, Pro, Enterprise)';
+COMMENT ON COLUMN packages.features IS 'JSON array with package features';
 
 -- NOTE: Data seeding moved to: infrastructure/scripts/seed-database.sh
 
