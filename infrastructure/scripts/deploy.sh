@@ -87,15 +87,35 @@ if [ -n "$GIT_SHA" ]; then
   SHORT_SHA="${GIT_SHA:0:7}"
   echo -e "${YELLOW}Pulling images with SHA tag: $SHORT_SHA${NC}"
 
-  # Pull SHA-tagged images
-  docker pull "ghcr.io/dieplai/saas-epr-backend:${ENV}-${GIT_SHA}" && \
+  # Try to pull SHA-tagged images with fallback
+  PULL_FAILED=0
+
+  if ! docker pull "ghcr.io/dieplai/saas-epr-backend:${ENV}-${GIT_SHA}"; then
+    echo -e "${YELLOW}WARNING: Failed to pull SHA-tagged backend image${NC}"
+    PULL_FAILED=1
+  else
     docker tag "ghcr.io/dieplai/saas-epr-backend:${ENV}-${GIT_SHA}" "ghcr.io/dieplai/saas-epr-backend:${ENV}"
+  fi
 
-  docker pull "ghcr.io/dieplai/saas-epr-chatbot:${ENV}-${GIT_SHA}" && \
+  if ! docker pull "ghcr.io/dieplai/saas-epr-chatbot:${ENV}-${GIT_SHA}"; then
+    echo -e "${YELLOW}WARNING: Failed to pull SHA-tagged chatbot image${NC}"
+    PULL_FAILED=1
+  else
     docker tag "ghcr.io/dieplai/saas-epr-chatbot:${ENV}-${GIT_SHA}" "ghcr.io/dieplai/saas-epr-chatbot:${ENV}"
+  fi
 
-  docker pull "ghcr.io/dieplai/saas-epr-web:${ENV}-${GIT_SHA}" && \
+  if ! docker pull "ghcr.io/dieplai/saas-epr-web:${ENV}-${GIT_SHA}"; then
+    echo -e "${YELLOW}WARNING: Failed to pull SHA-tagged web image${NC}"
+    PULL_FAILED=1
+  else
     docker tag "ghcr.io/dieplai/saas-epr-web:${ENV}-${GIT_SHA}" "ghcr.io/dieplai/saas-epr-web:${ENV}"
+  fi
+
+  # Fallback to mutable tags if SHA pull failed
+  if [ "$PULL_FAILED" = "1" ]; then
+    echo -e "${YELLOW}Falling back to mutable tags (docker-compose pull)${NC}"
+    docker compose -f docker-compose.$ENV.yml --env-file ".env.$ENV" pull
+  fi
 else
   # Fallback: pull mutable tags (less reliable due to caching)
   echo -e "${YELLOW}No GIT_SHA provided, pulling mutable tags (may use cache)${NC}"
