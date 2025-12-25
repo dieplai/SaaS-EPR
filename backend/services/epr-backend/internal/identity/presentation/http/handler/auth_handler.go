@@ -64,36 +64,26 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Auto-assign FREE package to new user
-	// Find FREE package (price = 0 or name = "Free")
-	freePackage, err := h.packageRepo.FindByPrice(c.Request.Context(), 0)
-	if err != nil {
-		// Log error but don't fail registration
-		c.JSON(http.StatusCreated, gin.H{
-			"message": "user registered successfully (free package not assigned)",
-			"user_id": userID.String(),
-		})
-		return
-	}
-
-	// Create subscription with FREE package
+	// Auto-create FREE subscription for new user (no package required)
+	// Token limit will be loaded from system_settings.free_account_token_limit
 	subscriptionCmd := subscriptioncommand.CreateSubscriptionCommand{
 		UserID:    userID,
-		PackageID: freePackage.ID,
+		PackageID: nil, // nil = FREE account (no paid package)
 	}
 
 	_, err = h.createSubscriptionHandler.Handle(c.Request.Context(), subscriptionCmd)
 	if err != nil {
 		// Log error but don't fail registration
 		c.JSON(http.StatusCreated, gin.H{
-			"message": "user registered successfully (subscription not created)",
+			"message": "user registered successfully (free subscription not created)",
 			"user_id": userID.String(),
+			"error":   err.Error(),
 		})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "user registered successfully with free package",
+		"message": "user registered successfully with free account",
 		"user_id": userID.String(),
 	})
 }

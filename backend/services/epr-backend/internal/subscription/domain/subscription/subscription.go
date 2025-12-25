@@ -11,7 +11,7 @@ import (
 type Subscription struct {
 	domain.AggregateRoot
 	userID             uuid.UUID
-	packageID          uuid.UUID
+	packageID          *uuid.UUID // Pointer to support nil (FREE accounts)
 	startDate          time.Time
 	endDate            time.Time
 	status             Status
@@ -26,7 +26,7 @@ type Subscription struct {
 
 func NewSubscription(
 	userID uuid.UUID,
-	packageID uuid.UUID,
+	packageID *uuid.UUID, // Pointer to support nil (FREE accounts)
 	durationDays int,
 	tokenLimit int,
 ) (*Subscription, error) {
@@ -67,7 +67,7 @@ func NewSubscription(
 func ReconstructSubscription(
 	id uuid.UUID,
 	userID uuid.UUID,
-	packageID uuid.UUID,
+	packageID *uuid.UUID, // Pointer to support nil (FREE accounts)
 	startDate time.Time,
 	endDate time.Time,
 	status Status,
@@ -109,7 +109,7 @@ func (s *Subscription) GetUserID() uuid.UUID {
 	return s.userID
 }
 
-func (s *Subscription) GetPackageID() uuid.UUID {
+func (s *Subscription) GetPackageID() *uuid.UUID {
 	return s.packageID
 }
 

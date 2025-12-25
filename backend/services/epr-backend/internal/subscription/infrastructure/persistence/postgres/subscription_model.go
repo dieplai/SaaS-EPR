@@ -10,7 +10,7 @@ import (
 type SubscriptionModel struct {
 	ID                 uuid.UUID      `gorm:"type:uuid;primaryKey"`
 	UserID             uuid.UUID      `gorm:"type:uuid;not null;index"`
-	PackageID          uuid.UUID      `gorm:"type:uuid;not null;index"`
+	PackageID          *uuid.UUID     `gorm:"type:uuid;index"` // Nullable for FREE accounts
 	StartDate          time.Time      `gorm:"type:timestamp;not null"`
 	EndDate            time.Time      `gorm:"type:timestamp;not null"`
 	Status             string         `gorm:"type:varchar(20);not null;index"`

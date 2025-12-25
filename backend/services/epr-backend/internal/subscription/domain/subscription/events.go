@@ -10,13 +10,13 @@ type SubscriptionCreatedEvent struct {
 	eventID        uuid.UUID
 	SubscriptionID uuid.UUID
 	UserID         uuid.UUID
-	PackageID      uuid.UUID
+	PackageID      *uuid.UUID // Pointer to support nil (FREE accounts)
 	StartDate      time.Time
 	EndDate        time.Time
 	occurredAt     time.Time
 }
 
-func NewSubscriptionCreatedEvent(subscriptionID, userID, packageID uuid.UUID, startDate, endDate time.Time) *SubscriptionCreatedEvent {
+func NewSubscriptionCreatedEvent(subscriptionID, userID uuid.UUID, packageID *uuid.UUID, startDate, endDate time.Time) *SubscriptionCreatedEvent {
 	return &SubscriptionCreatedEvent{
 		eventID:        uuid.New(),
 		SubscriptionID: subscriptionID,

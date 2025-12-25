@@ -12,7 +12,7 @@ import (
 
 type CreateSubscriptionCommand struct {
 	UserID    uuid.UUID
-	PackageID uuid.UUID
+	PackageID *uuid.UUID // Pointer to support nil (FREE accounts without package)
 }
 
 type CreateSubscriptionHandler struct {
@@ -41,33 +41,40 @@ func (h *CreateSubscriptionHandler) Handle(ctx context.Context, cmd CreateSubscr
 		}
 	}
 
-	pkg, err := h.packageRepo.FindByID(ctx, cmd.PackageID)
-	if err != nil {
-		return uuid.Nil, err
-	}
+	var tokenLimit int
+	var durationDays int
 
-	// Only check IsActive for paid packages (Free package is always allowed)
-	isFreePackage := pkg.GetPrice().Amount() == 0
-	if !isFreePackage && !pkg.IsActive() {
-		return uuid.Nil, ErrPackageNotActive
-	}
-
-	// For free packages, use token limit from system settings
-	tokenLimit := pkg.GetTokenLimit().Value()
-	if isFreePackage {
+	// Handle FREE account (no package) vs PAID package
+	if cmd.PackageID == nil {
+		// FREE ACCOUNT - Use token limit from system settings
 		freeAccountSetting, err := h.settingsRepo.FindByKey(ctx, "free_account_token_limit")
-		if err == nil {
-			settingTokenLimit, err := freeAccountSetting.GetIntValue()
-			if err == nil {
-				tokenLimit = settingTokenLimit
-			}
+		if err != nil {
+			return uuid.Nil, fmt.Errorf("failed to get free account token limit: %w", err)
 		}
+		tokenLimit, err = freeAccountSetting.GetIntValue()
+		if err != nil {
+			return uuid.Nil, fmt.Errorf("invalid free_account_token_limit setting: %w", err)
+		}
+		durationDays = 365 // Free accounts never expire (1 year)
+	} else {
+		// PAID PACKAGE - Get limits from package
+		pkg, err := h.packageRepo.FindByID(ctx, *cmd.PackageID)
+		if err != nil {
+			return uuid.Nil, fmt.Errorf("package not found: %w", err)
+		}
+
+		if !pkg.IsActive() {
+			return uuid.Nil, ErrPackageNotActive
+		}
+
+		tokenLimit = pkg.GetTokenLimit().Value()
+		durationDays = pkg.GetDuration().Days()
 	}
 
 	sub, err := subscription.NewSubscription(
 		cmd.UserID,
 		cmd.PackageID,
-		pkg.GetDuration().Days(),
+		durationDays,
 		tokenLimit,
 	)
 	if err != nil {
