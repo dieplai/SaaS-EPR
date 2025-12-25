@@ -5,7 +5,11 @@
 -- Free tier is NOT a package - it's the default account state
 -- All token limits are for OUTPUT tokens only
 -- ========================================
--- This script is IDEMPOTENT - safe to run multiple times
+-- IDEMPOTENCY STRATEGY: INSERT-ONLY
+-- ========================================
+-- ON CONFLICT DO NOTHING - Only insert if package doesn't exist
+-- This prevents overwriting admin's manual price/quota changes
+-- If you need to update existing packages, use admin panel or manual SQL
 -- ========================================
 
 -- ========================================
@@ -76,15 +80,7 @@ VALUES
         NOW()
     )
 
-ON CONFLICT (name) DO UPDATE SET
-    description = EXCLUDED.description,
-    price = EXCLUDED.price,
-    token_limit = EXCLUDED.token_limit,
-    duration_days = EXCLUDED.duration_days,
-    features = EXCLUDED.features,
-    is_active = EXCLUDED.is_active,
-    query_limit_daily = EXCLUDED.query_limit_daily,
-    updated_at = NOW();
+ON CONFLICT (name) DO NOTHING;
 
 -- ========================================
 -- VERIFICATION

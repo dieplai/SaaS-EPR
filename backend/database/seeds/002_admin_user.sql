@@ -6,7 +6,11 @@
 -- Password: Lai712004!
 -- Role: admin
 -- ========================================
--- This script is IDEMPOTENT - safe to run multiple times
+-- IDEMPOTENCY STRATEGY: INSERT-ONLY
+-- ========================================
+-- ON CONFLICT DO NOTHING - Only insert if user doesn't exist
+-- This prevents overwriting admin's password/profile changes
+-- If admin loses access, manually reset password via SQL
 -- ========================================
 
 -- ========================================
@@ -39,12 +43,7 @@ VALUES (
     NOW(),
     NOW()
 )
-ON CONFLICT (email) DO UPDATE SET
-    role = 'admin',
-    is_verified = TRUE,
-    email_verified = TRUE,
-    email_verified_at = NOW(),
-    updated_at = NOW();
+ON CONFLICT (email) DO NOTHING;
 
 -- ========================================
 -- VERIFICATION
