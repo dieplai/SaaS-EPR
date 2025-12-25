@@ -12,7 +12,6 @@ import (
 
 	"github.com/epr-legal/epr-backend/internal/identity/application/command"
 	identityquery "github.com/epr-legal/epr-backend/internal/identity/application/query"
-	identityinfra "github.com/epr-legal/epr-backend/internal/identity/infrastructure/persistence/postgres"
 	"github.com/epr-legal/epr-backend/internal/identity/infrastructure/security"
 	identityhttp "github.com/epr-legal/epr-backend/internal/identity/presentation/http"
 	identityhandler "github.com/epr-legal/epr-backend/internal/identity/presentation/http/handler"
@@ -27,8 +26,6 @@ import (
 	subscriptionhttp "github.com/epr-legal/epr-backend/internal/subscription/presentation/http"
 	subscriptionhandler "github.com/epr-legal/epr-backend/internal/subscription/presentation/http/handler"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 func main() {
@@ -46,10 +43,9 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	logger.Info("Running database migrations...")
-	if err := runMigrations(db); err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
-	}
+	// NOTE: Database migrations are handled by CI/CD pipeline
+	// See: infrastructure/scripts/run-migrations.sh
+	// Migrations run BEFORE application deployment
 
 	jwtService := security.NewJWTService(
 		cfg.JWT.Secret,
@@ -180,139 +176,4 @@ func setupRouter(env string) *gin.Engine {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	return gin.Default()
-}
-
-func runMigrations(db *gorm.DB) error {
-	// IMPORTANT: GORM AutoMigrate is DISABLED in production
-	// Production uses manual SQL migrations only (best practice)
-	// Development can use AutoMigrate for rapid prototyping
-	env := os.Getenv("NODE_ENV")
-	if env == "production" || env == "staging" {
-		log.Println("INFO: GORM AutoMigrate SKIPPED in production/staging (using manual SQL migrations)")
-		log.Println("INFO: Manual migrations are run by: infrastructure/scripts/run-migrations.sh")
-	} else {
-		// Only run AutoMigrate in development
-		log.Println("INFO: Running GORM AutoMigrate (development mode)")
-		if err := db.AutoMigrate(
-			&identityinfra.UserModel{},
-			&subscriptioninfra.PackageModel{},
-			&subscriptioninfra.SubscriptionModel{},
-			&subscriptioninfra.SystemSettingModel{},
-		); err != nil {
-			return fmt.Errorf("failed to run auto-migrations: %w", err)
-		}
-	}
-
-	// Create default system settings if they don't exist
-	if err := createDefaultSystemSettings(db); err != nil {
-		return fmt.Errorf("failed to create default system settings: %w", err)
-	}
-
-	// Create default packages if they don't exist
-	if err := createDefaultPackages(db); err != nil {
-		return fmt.Errorf("failed to create default packages: %w", err)
-	}
-
-	return nil
-}
-
-func createDefaultSystemSettings(db *gorm.DB) error {
-	settings := []subscriptioninfra.SystemSettingModel{
-		{
-			ID:           uuid.New(),
-			SettingKey:   "token_reset_enabled",
-			SettingValue: "true",
-			Description:  "Enable automatic token reset for subscriptions",
-			ValueType:    "boolean",
-		},
-		{
-			ID:           uuid.New(),
-			SettingKey:   "token_reset_cycle_days",
-			SettingValue: "30",
-			Description:  "Number of days in token reset cycle (default: 30 days)",
-			ValueType:    "integer",
-		},
-		{
-			ID:           uuid.New(),
-			SettingKey:   "free_account_token_limit",
-			SettingValue: "100",
-			Description:  "Default token limit for free accounts",
-			ValueType:    "integer",
-		},
-	}
-
-	for _, setting := range settings {
-		var existing subscriptioninfra.SystemSettingModel
-		if err := db.Where("setting_key = ?", setting.SettingKey).First(&existing).Error; err == gorm.ErrRecordNotFound {
-			if err := db.Create(&setting).Error; err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func createDefaultPackages(db *gorm.DB) error {
-	packages := []subscriptioninfra.PackageModel{
-		{
-			ID:           uuid.New(),
-			Name:         "Free",
-			Description:  "Free tier for new users",
-			Price:        0,
-			TokenLimit:   100,
-			DurationDays: 30,
-			Features:     subscriptioninfra.FeatureArray{"Basic AI Chat", "Limited tokens"},
-			IsActive:     false, // Hidden from pricing page
-		},
-		{
-			ID:           uuid.New(),
-			Name:         "Starter",
-			Description:  "Perfect for individuals and small teams",
-			Price:        9.99,
-			TokenLimit:   1000,
-			DurationDays: 30,
-			Features:     subscriptioninfra.FeatureArray{"AI Chat", "Document Analysis", "1000 tokens/month"},
-			IsActive:     true,
-		},
-		{
-			ID:           uuid.New(),
-			Name:         "Pro",
-			Description:  "For growing businesses",
-			Price:        29.99,
-			TokenLimit:   5000,
-			DurationDays: 30,
-			Features:     subscriptioninfra.FeatureArray{"AI Chat", "Document Analysis", "Priority Support", "5000 tokens/month"},
-			IsActive:     true,
-		},
-		{
-			ID:           uuid.New(),
-			Name:         "Enterprise",
-			Description:  "For large organizations with custom needs",
-			Price:        99.99,
-			TokenLimit:   20000,
-			DurationDays: 30,
-			Features:     subscriptioninfra.FeatureArray{"AI Chat", "Document Analysis", "Priority Support", "Custom Integration", "20000 tokens/month"},
-			IsActive:     true,
-		},
-	}
-
-	for _, pkg := range packages {
-		var existing subscriptioninfra.PackageModel
-		// Check if package exists
-		err := db.Where("name = ?", pkg.Name).First(&existing).Error
-
-		if err == gorm.ErrRecordNotFound {
-			// Package doesn't exist, create it
-			if err := db.Create(&pkg).Error; err != nil {
-				return err
-			}
-		} else if err != nil {
-			// Some other error occurred
-			return err
-		}
-		// If package exists, do nothing (keep existing data)
-	}
-
-	return nil
 }

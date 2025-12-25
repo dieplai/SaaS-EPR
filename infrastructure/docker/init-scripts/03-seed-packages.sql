@@ -7,85 +7,24 @@
 -- ========================================
 
 -- ========================================
--- PACKAGE 1: STARTER
+-- SEED DEFAULT PACKAGES (IDEMPOTENT)
 -- ========================================
-INSERT INTO packages (
-    id,
-    name,
-    description,
-    price,
-    token_limit,
-    duration_days,
-    features,
-    is_active,
-    created_at,
-    updated_at
-) VALUES (
-    gen_random_uuid(),
-    'Starter',
-    'Perfect for individuals and small teams',
-    5.00,       -- $5 USD/month (frontend converts to VND)
-    2000,       -- 2,000 tokens/month
-    30,
-    '["2,000 tokens/month", "Basic EPR compliance queries", "Email support", "Chat history", "Export to PDF"]'::jsonb,
-    true,
-    NOW(),
-    NOW()
-);
 
--- ========================================
--- PACKAGE 2: PROFESSIONAL
--- ========================================
-INSERT INTO packages (
-    id,
-    name,
-    description,
-    price,
-    token_limit,
-    duration_days,
-    features,
-    is_active,
-    created_at,
-    updated_at
-) VALUES (
-    gen_random_uuid(),
-    'Professional',
-    'For growing businesses',
-    10.00,      -- $10 USD/month (frontend converts to VND)
-    5000,       -- 5,000 tokens/month
-    30,
-    '["5,000 tokens/month", "Advanced RAG queries", "Priority support", "API access", "Webhook integration", "Custom templates", "24/7 support"]'::jsonb,
-    true,
-    NOW(),
-    NOW()
-);
+INSERT INTO packages (id, name, description, price, token_limit, duration_days, features, is_active, query_limit_daily, created_at, updated_at)
+VALUES
+    -- Free tier (hidden, for auto-assignment)
+    (gen_random_uuid(), 'Free', 'Free tier for new users', 0, 100, 30, '["Basic AI Chat", "Limited tokens"]'::jsonb, false, 10, NOW(), NOW()),
 
--- ========================================
--- PACKAGE 3: ENTERPRISE
--- ========================================
-INSERT INTO packages (
-    id,
-    name,
-    description,
-    price,
-    token_limit,
-    duration_days,
-    features,
-    is_active,
-    created_at,
-    updated_at
-) VALUES (
-    gen_random_uuid(),
-    'Enterprise',
-    'For large organizations with custom needs',
-    20.00,      -- $20 USD/month (frontend converts to VND)
-    20000,      -- 20,000 tokens/month
-    30,
-    '["20,000 tokens/month", "Unlimited users", "Dedicated support", "SLA 99.9%", "Custom model training", "On-premise option", "SSO integration", "Advanced analytics"]'::jsonb,
-    true,
-    NOW(),
-    NOW()
-);
+    -- Starter package
+    (gen_random_uuid(), 'Starter', 'Perfect for individuals and small teams', 5.00, 2000, 30, '["2,000 tokens/month", "Basic EPR compliance queries", "Email support", "Chat history", "Export to PDF"]'::jsonb, true, 50, NOW(), NOW()),
+
+    -- Professional package
+    (gen_random_uuid(), 'Professional', 'For growing businesses', 10.00, 5000, 30, '["5,000 tokens/month", "Advanced RAG queries", "Priority support", "API access", "Webhook integration", "Custom templates", "24/7 support"]'::jsonb, true, 200, NOW(), NOW()),
+
+    -- Enterprise package
+    (gen_random_uuid(), 'Enterprise', 'For large organizations with custom needs', 20.00, 20000, 30, '["20,000 tokens/month", "Unlimited users", "Dedicated support", "SLA 99.9%", "Custom model training", "On-premise option", "SSO integration", "Advanced analytics"]'::jsonb, true, 1000, NOW(), NOW())
+
+ON CONFLICT (name) DO NOTHING;
 
 -- ========================================
 -- VERIFICATION
