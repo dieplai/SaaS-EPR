@@ -7,8 +7,8 @@ type TokenLimit struct {
 }
 
 func NewTokenLimit(value int) (TokenLimit, error) {
-	if value <= 0 {
-		return TokenLimit{}, fmt.Errorf("token limit must be positive")
+	if value < 0 {
+		return TokenLimit{}, fmt.Errorf("token limit must be non-negative")
 	}
 	return TokenLimit{value: value}, nil
 }
