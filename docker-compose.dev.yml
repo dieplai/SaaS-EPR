@@ -53,8 +53,8 @@ services:
   # ============================================
   epr-backend:
     build:
-      context: ./backend/services/epr-backend
-      dockerfile: Dockerfile
+      context: ./backend
+      dockerfile: services/epr-backend/Dockerfile
     container_name: epr-backend
     ports:
       - "${EPR_BACKEND_PORT:-8001}:8001"

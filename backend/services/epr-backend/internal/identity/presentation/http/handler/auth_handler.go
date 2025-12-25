@@ -82,9 +82,51 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	// Auto-login: Generate tokens for the newly registered user
+	accessToken, err := h.jwtService.GenerateAccessToken(userID, req.Email)
+	if err != nil {
+		c.JSON(http.StatusCreated, gin.H{
+			"message": "user registered successfully but auto-login failed",
+			"user_id": userID.String(),
+		})
+		return
+	}
+
+	refreshToken, err := h.jwtService.GenerateRefreshToken(userID, req.Email)
+	if err != nil {
+		c.JSON(http.StatusCreated, gin.H{
+			"message": "user registered successfully but auto-login failed",
+			"user_id": userID.String(),
+		})
+		return
+	}
+
+	// Set secure HTTP-only cookies (default durations for non-remember-me)
+	durations := GetTokenDurations(false)
+	h.cookieHelper.SetAccessTokenCookie(c, accessToken, durations.AccessTokenMaxAge)
+	h.cookieHelper.SetRefreshTokenCookie(c, refreshToken, durations.RefreshTokenMaxAge)
+
+	// Fetch full user profile from database
+	userProfile, err := h.getUserProfileHandler.Handle(c.Request.Context(), query.GetUserProfileQuery{
+		UserID: userID,
+	})
+	if err != nil {
+		c.JSON(http.StatusCreated, gin.H{
+			"message": "user registered successfully but failed to fetch profile",
+			"user_id": userID.String(),
+		})
+		return
+	}
+
+	// Return user profile with auto-login (tokens are in HTTP-only cookies)
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "user registered successfully with free account",
-		"user_id": userID.String(),
+		"message": "user registered successfully and logged in",
+		"data": gin.H{
+			"user": userProfile,
+			// Security: Do NOT include tokens in response body
+			// Tokens are securely stored in HTTP-only cookies
+			"expires_in": h.jwtService.GetAccessExpiration(),
+		},
 	})
 }
 

@@ -58,8 +58,13 @@ export function useAuth() {
       full_name?: string;
     }) => apiClient.register(data),
     onSuccess: (response) => {
+      // Debug: Log the response to check format
+      console.log('Register response:', response);
+
       // Backend returns: { message, data: { user, expires_in } }
       const user = response?.data?.user || response?.user;
+      console.log('Extracted user:', user);
+
       if (user) {
         queryClient.setQueryData(['user'], user);
       }
