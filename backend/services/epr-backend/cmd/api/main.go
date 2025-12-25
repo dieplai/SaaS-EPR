@@ -183,14 +183,24 @@ func setupRouter(env string) *gin.Engine {
 }
 
 func runMigrations(db *gorm.DB) error {
-	// Run auto-migrations for all models
-	if err := db.AutoMigrate(
-		&identityinfra.UserModel{},
-		&subscriptioninfra.PackageModel{},
-		&subscriptioninfra.SubscriptionModel{},
-		&subscriptioninfra.SystemSettingModel{},
-	); err != nil {
-		return fmt.Errorf("failed to run auto-migrations: %w", err)
+	// IMPORTANT: GORM AutoMigrate is DISABLED in production
+	// Production uses manual SQL migrations only (best practice)
+	// Development can use AutoMigrate for rapid prototyping
+	env := os.Getenv("NODE_ENV")
+	if env == "production" || env == "staging" {
+		log.Println("INFO: GORM AutoMigrate SKIPPED in production/staging (using manual SQL migrations)")
+		log.Println("INFO: Manual migrations are run by: infrastructure/scripts/run-migrations.sh")
+	} else {
+		// Only run AutoMigrate in development
+		log.Println("INFO: Running GORM AutoMigrate (development mode)")
+		if err := db.AutoMigrate(
+			&identityinfra.UserModel{},
+			&subscriptioninfra.PackageModel{},
+			&subscriptioninfra.SubscriptionModel{},
+			&subscriptioninfra.SystemSettingModel{},
+		); err != nil {
+			return fmt.Errorf("failed to run auto-migrations: %w", err)
+		}
 	}
 
 	// Create default system settings if they don't exist
