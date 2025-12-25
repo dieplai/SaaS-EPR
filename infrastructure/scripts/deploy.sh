@@ -156,8 +156,17 @@ docker restart $BACKEND_CONTAINER
 sleep 3
 echo -e "${GREEN}OK: Backend restarted${NC}"
 
+# Run database migrations
+echo -e "${YELLOW}[8/10] Running database migrations${NC}"
+if "$PROJECT_ROOT/infrastructure/scripts/run-migrations.sh" "$ENV"; then
+  echo -e "${GREEN}OK: Database migrations completed${NC}"
+else
+  echo -e "${RED}ERROR: Database migrations failed${NC}"
+  exit 1
+fi
+
 # Health checks
-echo -e "${YELLOW}[8/9] Running health checks${NC}"
+echo -e "${YELLOW}[9/10] Running health checks${NC}"
 if "$PROJECT_ROOT/infrastructure/scripts/health-check.sh" "$ENV"; then
   echo -e "${GREEN}OK: Health checks passed${NC}"
 else
@@ -167,7 +176,7 @@ else
 fi
 
 # Smoke tests
-echo -e "${YELLOW}[9/9] Running smoke tests${NC}"
+echo -e "${YELLOW}[10/10] Running smoke tests${NC}"
 if "$PROJECT_ROOT/infrastructure/scripts/smoke-test.sh" "$ENV"; then
   echo -e "${GREEN}OK: Smoke tests passed${NC}"
 else
