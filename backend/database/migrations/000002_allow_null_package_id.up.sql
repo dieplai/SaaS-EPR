@@ -77,32 +77,39 @@ EXECUTE FUNCTION create_daily_quota();
 -- ============================================
 -- Add FREE account settings
 -- ============================================
--- Get admin user ID for updated_by (use first admin user)
+-- Get any user ID for updated_by (prefer admin, fallback to first user)
 DO $$
 DECLARE
-    v_admin_id UUID;
+    v_user_id UUID;
 BEGIN
-    SELECT id INTO v_admin_id FROM users WHERE email = 'admin@epr.vn' LIMIT 1;
+    -- Try to find admin user (by role or email pattern)
+    SELECT id INTO v_user_id
+    FROM users
+    WHERE role = 'admin' OR email LIKE '%admin%'
+    ORDER BY created_at
+    LIMIT 1;
 
-    -- If no admin exists, use a placeholder (will be updated later)
-    IF v_admin_id IS NULL THEN
-        v_admin_id := '00000000-0000-0000-0000-000000000000';
+    -- If no admin found, use first user (oldest account)
+    IF v_user_id IS NULL THEN
+        SELECT id INTO v_user_id FROM users ORDER BY created_at LIMIT 1;
     END IF;
 
-    -- Insert free account query limit setting
-    INSERT INTO system_settings (
-        setting_key,
-        setting_value,
-        description,
-        value_type,
-        updated_by
-    )
-    VALUES (
-        'free_account_query_limit_daily',
-        '50',
-        'Daily query limit for free accounts (queries per day)',
-        'integer',
-        v_admin_id
-    )
-    ON CONFLICT (setting_key) DO NOTHING;
+    -- Only insert if we found a valid user
+    IF v_user_id IS NOT NULL THEN
+        INSERT INTO system_settings (
+            setting_key,
+            setting_value,
+            description,
+            value_type,
+            updated_by
+        )
+        VALUES (
+            'free_account_query_limit_daily',
+            '50',
+            'Daily query limit for free accounts (queries per day)',
+            'integer',
+            v_user_id
+        )
+        ON CONFLICT (setting_key) DO NOTHING;
+    END IF;
 END $$;
