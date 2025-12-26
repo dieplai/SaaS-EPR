@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Check, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 import { adminApiClient } from "@/lib/admin-api-client";
 import { formatPrice, formatYearlyPrice } from "@/lib/currency";
+import { useAuth } from "@/hooks/useAuth";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
@@ -25,10 +26,25 @@ interface PackagePlan {
 
 const PricingSection = () => {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const sectionRef = useRef<HTMLDivElement>(null);
   const [isYearly, setIsYearly] = useState(false);
   const [plans, setPlans] = useState<PackagePlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Handle plan selection
+  const handleSelectPlan = (plan: PackagePlan) => {
+    // Check if authenticated
+    if (!isAuthenticated) {
+      // Redirect to login with return URL
+      navigate(`/login?returnUrl=/payment?plan=${plan.id}`);
+      return;
+    }
+
+    // Redirect to payment page with plan info
+    navigate(`/payment?plan=${plan.id}&period=${isYearly ? 'yearly' : 'monthly'}`);
+  };
 
   // Load packages from API
   useEffect(() => {
@@ -284,23 +300,17 @@ const PricingSection = () => {
                   </ul>
 
                   {/* CTA */}
-                  <Link to={
-                    plan.name.toLowerCase().includes('enterprise') ||
-                    plan.name.toLowerCase().includes('doanh')
-                      ? "/contact"
-                      : "/signup"
-                  }>
-                    <Button
-                      className={`w-full group/btn ${
-                        plan.popular
-                          ? "btn-glow text-primary-foreground"
-                          : "bg-muted hover:bg-muted/80 text-foreground"
-                      }`}
-                    >
-                      {plan.cta}
-                      <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover/btn:translate-x-1" />
-                    </Button>
-                  </Link>
+                  <Button
+                    onClick={() => handleSelectPlan(plan)}
+                    className={`w-full group/btn ${
+                      plan.popular
+                        ? "btn-glow text-primary-foreground"
+                        : "bg-muted hover:bg-muted/80 text-foreground"
+                    }`}
+                  >
+                    {i18n.language === 'vi' ? 'Chọn gói' : 'Select Plan'}
+                    <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover/btn:translate-x-1" />
+                  </Button>
                 </div>
               </div>
             </div>

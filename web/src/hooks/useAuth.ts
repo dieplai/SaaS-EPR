@@ -24,6 +24,12 @@ export function useAuth() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
+  // Get return URL from query params
+  const getReturnUrl = () => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('returnUrl') || '/';
+  };
+
   // Get current user profile
   // Auth state is determined by cookie presence (managed by backend)
   const { data: user, isLoading: isLoadingUser } = useQuery<User>({
@@ -46,7 +52,10 @@ export function useAuth() {
         queryClient.setQueryData(['user'], user);
       }
       queryClient.invalidateQueries({ queryKey: ['user'] });
-      navigate('/');
+
+      // Redirect to returnUrl or home
+      const returnUrl = getReturnUrl();
+      navigate(returnUrl);
     },
   });
 
@@ -58,18 +67,17 @@ export function useAuth() {
       full_name?: string;
     }) => apiClient.register(data),
     onSuccess: (response) => {
-      // Debug: Log the response to check format
-      console.log('Register response:', response);
-
       // Backend returns: { message, data: { user, expires_in } }
       const user = response?.data?.user || response?.user;
-      console.log('Extracted user:', user);
 
       if (user) {
         queryClient.setQueryData(['user'], user);
       }
       queryClient.invalidateQueries({ queryKey: ['user'] });
-      navigate('/');
+
+      // Redirect to returnUrl or home
+      const returnUrl = getReturnUrl();
+      navigate(returnUrl);
     },
   });
 

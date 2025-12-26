@@ -1,4 +1,5 @@
 import { useSearchParams, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 import {
   Building2,
   QrCode,
@@ -9,62 +10,59 @@ import {
   Zap,
   Crown,
   Shield,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { adminApiClient } from "@/lib/admin-api-client";
+import { formatPrice } from "@/lib/currency";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
-const plans = {
-  starter: {
-    name: "Starter",
-    icon: Sparkles,
-    price: "49",
-    priceVND: "1,200,000",
-    tokens: "100",
-    features: [
-      "100 AI tokens per month",
-      "Basic compliance tracking",
-      "Email support",
-      "1 user account",
-      "3 regions covered",
-    ],
-  },
-  pro: {
-    name: "Pro",
-    icon: Zap,
-    price: "149",
-    priceVND: "3,600,000",
-    tokens: "500",
-    features: [
-      "500 AI tokens per month",
-      "Full analytics dashboard",
-      "Priority support",
-      "5 user accounts",
-      "All 50+ regions",
-    ],
-  },
-  enterprise: {
-    name: "Enterprise",
-    icon: Crown,
-    price: "Custom",
-    priceVND: "Liên hệ",
-    tokens: "Unlimited",
-    features: [
-      "Unlimited AI tokens",
-      "Custom integrations",
-      "Dedicated success manager",
-      "Unlimited users",
-      "API access",
-    ],
-  },
-};
+interface PackageData {
+  id: string;
+  name: string;
+  price: number;
+  token_limit: number;
+  features: string[];
+  is_active: boolean;
+}
 
 const Payment = () => {
   const [searchParams] = useSearchParams();
-  const planParam = searchParams.get("plan") as keyof typeof plans | null;
-  const selectedPlan = planParam && plans[planParam] ? plans[planParam] : plans.pro;
+  const planId = searchParams.get("plan");
+  const period = searchParams.get("period") || "monthly";
   const { toast } = useToast();
+
+  const [packageData, setPackageData] = useState<PackageData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load package from API
+  useEffect(() => {
+    const loadPackage = async () => {
+      if (!planId) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const pkg = await adminApiClient.packages.getById(planId);
+        setPackageData(pkg);
+      } catch (error) {
+        console.error("Failed to load package:", error);
+        toast({
+          title: "Lỗi",
+          description: "Không thể tải thông tin gói. Vui lòng thử lại.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPackage();
+  }, [planId, toast]);
 
   const bankInfo = {
     bank: "Vietcombank",
@@ -78,6 +76,25 @@ const Payment = () => {
     navigator.clipboard.writeText(text);
     toast({ title: "Đã sao chép", description: `${label} đã được sao chép.` });
   };
+
+  // Get icon based on package name
+  const getPackageIcon = () => {
+    if (!packageData) return Zap;
+    const name = packageData.name.toLowerCase();
+    if (name.includes('starter') || name.includes('khởi')) return Sparkles;
+    if (name.includes('enterprise') || name.includes('doanh')) return Crown;
+    return Zap;
+  };
+
+  // Calculate price based on period
+  const getDisplayPrice = () => {
+    if (!packageData) return "0";
+    return period === "yearly"
+      ? formatPrice(packageData.price * 12 * 0.8, "vi") // 20% discount
+      : formatPrice(packageData.price, "vi");
+  };
+
+  const PlanIcon = getPackageIcon();
 
   return (
     <div className="min-h-screen bg-background">
@@ -97,58 +114,71 @@ const Payment = () => {
                 Quay lại trang giá
               </Link>
 
-              <div className="grid lg:grid-cols-2 gap-8">
-                {/* Plan Summary */}
-                <div className="glass-card p-8">
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
-                      <selectedPlan.icon className="w-7 h-7 text-primary" />
-                    </div>
-                    <div>
-                      <h1 className="text-2xl font-display font-bold text-foreground">
-                        Gói {selectedPlan.name}
-                      </h1>
-                      <p className="text-muted-foreground">
-                        {selectedPlan.tokens} tokens/tháng
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mb-6 p-4 rounded-xl bg-primary/5 border border-primary/20">
-                    <div className="flex items-baseline gap-2 mb-1">
-                      {selectedPlan.price !== "Custom" && (
-                        <span className="text-lg text-muted-foreground">€</span>
-                      )}
-                      <span className="text-4xl font-display font-bold text-foreground">
-                        {selectedPlan.price}
-                      </span>
-                      {selectedPlan.price !== "Custom" && (
-                        <span className="text-muted-foreground">/tháng</span>
-                      )}
-                    </div>
-                    <p className="text-sm text-primary">
-                      ≈ {selectedPlan.priceVND} VNĐ
-                    </p>
-                  </div>
-
-                  <ul className="space-y-3">
-                    {selectedPlan.features.map((feature, index) => (
-                      <li key={index} className="flex items-center gap-3">
-                        <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                          <Check className="w-3 h-3 text-primary" />
-                        </div>
-                        <span className="text-sm text-foreground">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <div className="mt-6 pt-6 border-t border-border">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Shield className="w-4 h-4" />
-                      <span>Bảo mật thanh toán 100%</span>
-                    </div>
-                  </div>
+              {isLoading ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
+              ) : !packageData ? (
+                <div className="text-center py-20">
+                  <p className="text-muted-foreground mb-4">
+                    Không tìm thấy thông tin gói
+                  </p>
+                  <Link to="/pricing">
+                    <Button>Quay lại trang giá</Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="grid lg:grid-cols-2 gap-8">
+                  {/* Plan Summary */}
+                  <div className="glass-card p-8">
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
+                        <PlanIcon className="w-7 h-7 text-primary" />
+                      </div>
+                      <div>
+                        <h1 className="text-2xl font-display font-bold text-foreground">
+                          Gói {packageData.name}
+                        </h1>
+                        <p className="text-muted-foreground">
+                          {packageData.token_limit.toLocaleString()} tokens/tháng
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mb-6 p-4 rounded-xl bg-primary/5 border border-primary/20">
+                      <div className="flex items-baseline gap-2 mb-1">
+                        <span className="text-4xl font-display font-bold text-foreground">
+                          {getDisplayPrice()}
+                        </span>
+                        <span className="text-muted-foreground">
+                          /{period === "yearly" ? "năm" : "tháng"}
+                        </span>
+                      </div>
+                      {period === "yearly" && (
+                        <p className="text-sm text-primary">
+                          Tiết kiệm 20% so với thanh toán theo tháng
+                        </p>
+                      )}
+                    </div>
+
+                    <ul className="space-y-3">
+                      {packageData.features.map((feature, index) => (
+                        <li key={index} className="flex items-center gap-3">
+                          <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                            <Check className="w-3 h-3 text-primary" />
+                          </div>
+                          <span className="text-sm text-foreground">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div className="mt-6 pt-6 border-t border-border">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Shield className="w-4 h-4" />
+                        <span>Bảo mật thanh toán 100%</span>
+                      </div>
+                    </div>
+                  </div>
 
                 {/* Payment Info */}
                 <div className="glass-card p-8">
@@ -200,7 +230,7 @@ const Payment = () => {
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">Số tiền</span>
                         <span className="font-bold text-primary text-lg">
-                          {selectedPlan.priceVND} VNĐ
+                          {getDisplayPrice()}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
@@ -259,7 +289,7 @@ const Payment = () => {
                     </Button>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </section>
