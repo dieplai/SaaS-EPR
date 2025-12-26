@@ -53,7 +53,7 @@ if [ "$DIRTY_STATE" = "t" ] || [ "$DIRTY_STATE" = "true" ]; then
 
   # Force clean the version
   echo -e "${YELLOW}[2/3] Forcing migration version to $CURRENT_VERSION (clean state)${NC}"
-  PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+  PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
   "$PROJECT_ROOT/infrastructure/scripts/db/migrate.sh" "$ENV" force "$CURRENT_VERSION"
 
   echo -e "${GREEN}OK: Migration state cleaned${NC}"
@@ -63,7 +63,7 @@ fi
 
 # Run pending migrations
 echo -e "${YELLOW}[3/3] Running pending migrations${NC}"
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 "$PROJECT_ROOT/infrastructure/scripts/db/migrate.sh" "$ENV" up
 
 echo -e "${GREEN}========================================${NC}"
