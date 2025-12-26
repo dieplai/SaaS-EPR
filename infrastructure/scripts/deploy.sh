@@ -194,16 +194,31 @@ MIGRATION_VERSION=$(docker exec epr-postgres psql -U "$DB_USER" -d "$DB_NAME" -t
 
 echo -e "${YELLOW}Current migration version: $MIGRATION_VERSION${NC}"
 
-# Always run migrations to ensure database is up-to-date
-# golang-migrate is idempotent and will only apply new migrations
-if "$PROJECT_ROOT/infrastructure/scripts/db/migrate.sh" "$ENV" up; then
-  NEW_VERSION=$(docker exec epr-postgres psql -U "$DB_USER" -d "$DB_NAME" -t -c \
-    "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1;" 2>/dev/null | xargs || echo "0")
-  echo -e "${GREEN}OK: Database migrations completed (version: $MIGRATION_VERSION -> $NEW_VERSION)${NC}"
+# Check if migration is dirty
+DIRTY_STATE=$(docker exec epr-postgres psql -U "$DB_USER" -d "$DB_NAME" -t -c \
+  "SELECT dirty FROM schema_migrations ORDER BY version DESC LIMIT 1;" 2>/dev/null | xargs || echo "f")
+
+if [ "$DIRTY_STATE" = "t" ] || [ "$DIRTY_STATE" = "true" ]; then
+  echo -e "${RED}WARNING: Migration is in dirty state, fixing...${NC}"
+  if "$PROJECT_ROOT/infrastructure/scripts/db/fix-dirty-migration.sh" "$ENV"; then
+    echo -e "${GREEN}OK: Dirty migration state fixed${NC}"
+  else
+    echo -e "${RED}ERROR: Failed to fix dirty migration - rolling back${NC}"
+    "$PROJECT_ROOT/infrastructure/scripts/ops/rollback.sh" "$ENV"
+    exit 1
+  fi
 else
-  echo -e "${RED}ERROR: Database migrations failed - rolling back${NC}"
-  "$PROJECT_ROOT/infrastructure/scripts/ops/rollback.sh" "$ENV"
-  exit 1
+  # Always run migrations to ensure database is up-to-date
+  # golang-migrate is idempotent and will only apply new migrations
+  if "$PROJECT_ROOT/infrastructure/scripts/db/migrate.sh" "$ENV" up; then
+    NEW_VERSION=$(docker exec epr-postgres psql -U "$DB_USER" -d "$DB_NAME" -t -c \
+      "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1;" 2>/dev/null | xargs || echo "0")
+    echo -e "${GREEN}OK: Database migrations completed (version: $MIGRATION_VERSION -> $NEW_VERSION)${NC}"
+  else
+    echo -e "${RED}ERROR: Database migrations failed - rolling back${NC}"
+    "$PROJECT_ROOT/infrastructure/scripts/ops/rollback.sh" "$ENV"
+    exit 1
+  fi
 fi
 
 # Seed initial data (idempotent)
