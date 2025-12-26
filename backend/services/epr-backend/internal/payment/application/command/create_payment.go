@@ -44,10 +44,11 @@ func (h *CreatePaymentHandler) Handle(ctx context.Context, cmd CreatePaymentComm
 	}
 
 	// Calculate amount based on period
-	// Package price is in USD, convert to VND for payment (1 USD = 25,000 VND)
-	const USD_TO_VND = 25000
+	// Package price is in USD, convert to VND for payment (1 USD = 26,312.40 VND)
+	// Must match frontend exchange rate in web/src/lib/currency.ts
+	const USD_TO_VND = 26312.40
 	priceUSD := decimal.NewFromFloat(pkg.GetPrice().Amount())
-	amountVND := priceUSD.Mul(decimal.NewFromInt(USD_TO_VND))
+	amountVND := priceUSD.Mul(decimal.NewFromFloat(USD_TO_VND))
 
 	if cmd.Period == "yearly" {
 		// Yearly = 12 months with 20% discount
