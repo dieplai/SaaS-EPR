@@ -17,6 +17,12 @@ import (
 	identityhttp "github.com/epr-legal/epr-backend/internal/identity/presentation/http"
 	identityhandler "github.com/epr-legal/epr-backend/internal/identity/presentation/http/handler"
 	"github.com/epr-legal/epr-backend/internal/identity/presentation/http/middleware"
+	paymentcommand "github.com/epr-legal/epr-backend/internal/payment/application/command"
+	paymentquery "github.com/epr-legal/epr-backend/internal/payment/application/query"
+	paymentinfra "github.com/epr-legal/epr-backend/internal/payment/infrastructure/persistence/postgres"
+	"github.com/epr-legal/epr-backend/internal/payment/infrastructure/sepay"
+	paymenthttp "github.com/epr-legal/epr-backend/internal/payment/presentation/http"
+	paymenthandler "github.com/epr-legal/epr-backend/internal/payment/presentation/http/handler"
 	"github.com/epr-legal/epr-backend/internal/shared/infrastructure/config"
 	"github.com/epr-legal/epr-backend/internal/shared/infrastructure/database"
 	"github.com/epr-legal/epr-backend/internal/shared/infrastructure/logger"
@@ -58,6 +64,7 @@ func main() {
 	packageRepo := subscriptioninfra.NewPackageRepository(db)
 	subscriptionRepo := subscriptioninfra.NewSubscriptionRepository(db)
 	systemSettingsRepo := subscriptioninfra.NewSystemSettingsRepository(db)
+	paymentRepo := paymentinfra.NewPaymentRepository(db)
 
 	// Identity handlers
 	registerUserHandler := command.NewRegisterUserHandler(userRepo)
@@ -84,6 +91,25 @@ func main() {
 	// Free account settings handlers
 	getFreeAccountSettingsHandler := subscriptionquery.NewGetFreeAccountSettingsHandler(systemSettingsRepo)
 	updateFreeAccountSettingsHandler := subscriptioncommand.NewUpdateFreeAccountSettingsHandler(systemSettingsRepo)
+
+	// SePay client
+	sepayClient := sepay.NewClient(
+		cfg.SePay.MerchantID,
+		cfg.SePay.SecretKey,
+		cfg.SePay.BankName,
+		cfg.SePay.BankAccount,
+		cfg.SePay.AccountHolder,
+	)
+
+	// Payment handlers
+	createPaymentHandler := paymentcommand.NewCreatePaymentHandler(paymentRepo, packageRepo)
+	confirmPaymentHandler := paymentcommand.NewConfirmPaymentHandler(
+		paymentRepo,
+		createSubscriptionHandler,
+		subscriptionRepo,
+		packageRepo,
+	)
+	getPaymentHandler := paymentquery.NewGetPaymentHandler(paymentRepo)
 
 	// Start token reset scheduler
 	tokenResetScheduler := scheduler.NewTokenResetScheduler(processTokenResetsHandler)
@@ -127,6 +153,15 @@ func main() {
 		getFreeAccountSettingsHandler,
 		updateFreeAccountSettingsHandler,
 	)
+	paymentHandler := paymenthandler.NewPaymentHandler(
+		createPaymentHandler,
+		getPaymentHandler,
+		sepayClient,
+	)
+	webhookHandler := paymenthandler.NewWebhookHandler(
+		confirmPaymentHandler,
+		sepayClient,
+	)
 
 	authMiddleware := middleware.NewAuthMiddleware(jwtService)
 
@@ -143,6 +178,7 @@ func main() {
 
 	identityhttp.RegisterRoutes(router, authHandler, userHandler, authMiddleware)
 	subscriptionhttp.RegisterRoutes(router, packageHandler, subscriptionHandler, settingsHandler, authMiddleware)
+	paymenthttp.RegisterRoutes(router, paymentHandler, webhookHandler, authMiddleware)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%s", cfg.Server.Port),

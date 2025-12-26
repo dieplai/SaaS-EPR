@@ -13,6 +13,7 @@ type Config struct {
 	Database DatabaseConfig
 	Redis    RedisConfig
 	JWT      JWTConfig
+	SePay    SePayConfig
 }
 
 type ServerConfig struct {
@@ -32,6 +33,14 @@ type JWTConfig struct {
 	Secret            string
 	AccessExpiration  int
 	RefreshExpiration int
+}
+
+type SePayConfig struct {
+	MerchantID    string
+	SecretKey     string
+	BankName      string
+	BankAccount   string
+	AccountHolder string
 }
 
 func Load() (*Config, error) {
@@ -55,6 +64,13 @@ func Load() (*Config, error) {
 			Secret:            getEnv("JWT_SECRET", "dev_secret_key_change_in_production"),
 			AccessExpiration:  accessExp,
 			RefreshExpiration: refreshExp,
+		},
+		SePay: SePayConfig{
+			MerchantID:    getEnv("SEPAY_MERCHANT_ID", ""),
+			SecretKey:     getEnv("SEPAY_SECRET_KEY", ""),
+			BankName:      getEnv("SEPAY_BANK_NAME", ""),
+			BankAccount:   getEnv("SEPAY_BANK_ACCOUNT", ""),
+			AccountHolder: getEnv("SEPAY_ACCOUNT_HOLDER", ""),
 		},
 	}
 
