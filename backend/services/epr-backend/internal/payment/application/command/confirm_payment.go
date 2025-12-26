@@ -90,26 +90,26 @@ func (h *ConfirmPaymentHandler) Handle(ctx context.Context, cmd ConfirmPaymentCo
 }
 
 // extractOrderCode extracts order code from SePay transfer content
-// Order code format: EPR20251226001
+// Order code format: EPR20251226XXXX (EPR + YYYYMMDD + 4 random digits = 15 chars)
 func extractOrderCode(content string) string {
 	// Convert to uppercase for case-insensitive matching
 	content = strings.ToUpper(content)
 
-	// Look for EPR followed by 8 digits and 3-4 more digits
-	// Format: EPR + YYYYMMDD + XXX or XXXX
+	// Look for EPR followed by 8 digits (date) and 4 more digits (random)
+	// Format: EPR + YYYYMMDD + XXXX (total 15 characters)
 	words := strings.Fields(content)
 	for _, word := range words {
-		if strings.HasPrefix(word, "EPR") && len(word) >= 14 {
-			// Extract EPR20251226001
-			return word[:14]
+		if strings.HasPrefix(word, "EPR") && len(word) >= 15 {
+			// Extract EPR20251226XXXX (15 characters)
+			return word[:15]
 		}
 	}
 
 	// Alternative: scan the entire content for pattern
 	if idx := strings.Index(content, "EPR"); idx >= 0 {
-		// Extract up to 14 characters starting from EPR
-		if idx+14 <= len(content) {
-			return content[idx : idx+14]
+		// Extract up to 15 characters starting from EPR
+		if idx+15 <= len(content) {
+			return content[idx : idx+15]
 		}
 	}
 
