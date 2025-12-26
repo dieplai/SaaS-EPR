@@ -32,53 +32,46 @@ fi
 
 # Create payments table directly
 echo -e "${YELLOW}[2/5] Creating payments table${NC}"
-docker exec epr-postgres psql -U "$DB_USER" -d "$DB_NAME" << 'EOSQL'
+
+# Create table
+docker exec epr-postgres psql -U "$DB_USER" -d "$DB_NAME" -c "
 CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     package_id UUID NOT NULL REFERENCES packages(id) ON DELETE RESTRICT,
-
-    -- Payment details
     order_code VARCHAR(50) UNIQUE NOT NULL,
     amount DECIMAL(15,2) NOT NULL CHECK (amount > 0),
     currency VARCHAR(3) DEFAULT 'VND',
     period VARCHAR(10) NOT NULL CHECK (period IN ('monthly', 'yearly')),
-
-    -- SePay transaction details (filled by webhook)
     sepay_transaction_id BIGINT UNIQUE,
     sepay_reference_code VARCHAR(100),
     sepay_gateway VARCHAR(50),
     sepay_account_number VARCHAR(50),
     sepay_transaction_date TIMESTAMP,
     sepay_transfer_content TEXT,
-
-    -- Payment status
     status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed', 'cancelled', 'refunded')),
-
-    -- Timestamps
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     paid_at TIMESTAMP,
     expires_at TIMESTAMP,
-
-    -- Indexes for performance
     CONSTRAINT fk_payments_user FOREIGN KEY (user_id) REFERENCES users(id),
     CONSTRAINT fk_payments_package FOREIGN KEY (package_id) REFERENCES packages(id)
-);
+);"
 
--- Indexes
+# Create indexes
+docker exec epr-postgres psql -U "$DB_USER" -d "$DB_NAME" -c "
 CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_order_code ON payments(order_code);
 CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
 CREATE INDEX IF NOT EXISTS idx_payments_sepay_transaction_id ON payments(sepay_transaction_id);
-CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments(created_at DESC);"
 
--- Trigger
+# Create trigger
+docker exec epr-postgres psql -U "$DB_USER" -d "$DB_NAME" -c "
 CREATE TRIGGER trigger_payments_updated_at
 BEFORE UPDATE ON payments
 FOR EACH ROW
-EXECUTE FUNCTION trigger_set_updated_at();
-EOSQL
+EXECUTE FUNCTION trigger_set_updated_at();"
 
 echo -e "${GREEN}OK: Payments table created${NC}"
 
