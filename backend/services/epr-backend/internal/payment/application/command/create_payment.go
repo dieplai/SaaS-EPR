@@ -44,11 +44,17 @@ func (h *CreatePaymentHandler) Handle(ctx context.Context, cmd CreatePaymentComm
 	}
 
 	// Calculate amount based on period
-	amount := decimal.NewFromFloat(pkg.GetPrice().Amount())
+	// Package price is in USD, convert to VND for payment (1 USD = 25,000 VND)
+	const USD_TO_VND = 25000
+	priceUSD := decimal.NewFromFloat(pkg.GetPrice().Amount())
+	amountVND := priceUSD.Mul(decimal.NewFromInt(USD_TO_VND))
+
 	if cmd.Period == "yearly" {
 		// Yearly = 12 months with 20% discount
-		amount = amount.Mul(decimal.NewFromInt(12)).Mul(decimal.NewFromFloat(0.8))
+		amountVND = amountVND.Mul(decimal.NewFromInt(12)).Mul(decimal.NewFromFloat(0.8))
 	}
+
+	amount := amountVND
 
 	// Generate unique order code: EPR + YYYYMMDD + random 4 digits
 	orderCode := fmt.Sprintf("EPR%s%04d",
