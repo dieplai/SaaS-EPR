@@ -106,8 +106,6 @@ func main() {
 	confirmPaymentHandler := paymentcommand.NewConfirmPaymentHandler(
 		paymentRepo,
 		createSubscriptionHandler,
-		subscriptionRepo,
-		packageRepo,
 	)
 	getPaymentHandler := paymentquery.NewGetPaymentHandler(paymentRepo)
 

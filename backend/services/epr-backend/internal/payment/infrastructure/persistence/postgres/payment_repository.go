@@ -2,63 +2,52 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
+	"errors"
 
 	"github.com/epr-legal/epr-backend/internal/payment/domain/payment"
+	"github.com/epr-legal/epr-backend/internal/shared/domain"
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type PaymentRepository struct {
-	db *sqlx.DB
+	db *gorm.DB
 }
 
-func NewPaymentRepository(db *sqlx.DB) *PaymentRepository {
+func NewPaymentRepository(db *gorm.DB) *PaymentRepository {
 	return &PaymentRepository{db: db}
 }
 
 func (r *PaymentRepository) Save(ctx context.Context, pmt *payment.Payment) error {
 	model := toModel(pmt)
 
-	query := `
-		INSERT INTO payments (
-			id, user_id, package_id, order_code, amount, currency, period,
-			sepay_transaction_id, sepay_reference_code, sepay_gateway,
-			sepay_account_number, sepay_transaction_date, sepay_transfer_content,
-			status, created_at, updated_at, paid_at, expires_at
-		) VALUES (
-			:id, :user_id, :package_id, :order_code, :amount, :currency, :period,
-			:sepay_transaction_id, :sepay_reference_code, :sepay_gateway,
-			:sepay_account_number, :sepay_transaction_date, :sepay_transfer_content,
-			:status, :created_at, :updated_at, :paid_at, :expires_at
-		)
-		ON CONFLICT (id) DO UPDATE SET
-			sepay_transaction_id = EXCLUDED.sepay_transaction_id,
-			sepay_reference_code = EXCLUDED.sepay_reference_code,
-			sepay_gateway = EXCLUDED.sepay_gateway,
-			sepay_account_number = EXCLUDED.sepay_account_number,
-			sepay_transaction_date = EXCLUDED.sepay_transaction_date,
-			sepay_transfer_content = EXCLUDED.sepay_transfer_content,
-			status = EXCLUDED.status,
-			updated_at = EXCLUDED.updated_at,
-			paid_at = EXCLUDED.paid_at
-	`
-
-	_, err := r.db.NamedExecContext(ctx, query, model)
-	return err
+	// UPSERT using GORM's Clauses
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "id"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"sepay_transaction_id",
+			"sepay_reference_code",
+			"sepay_gateway",
+			"sepay_account_number",
+			"sepay_transaction_date",
+			"sepay_transfer_content",
+			"status",
+			"updated_at",
+			"paid_at",
+		}),
+	}).Create(model).Error
 }
 
 func (r *PaymentRepository) FindByID(ctx context.Context, id uuid.UUID) (*payment.Payment, error) {
 	var model PaymentModel
-	query := `SELECT * FROM payments WHERE id = $1`
+	result := r.db.WithContext(ctx).Where("id = ?", id).First(&model)
 
-	err := r.db.GetContext(ctx, &model, query, id)
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("payment not found")
-	}
-	if err != nil {
-		return nil, err
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, result.Error
 	}
 
 	return toDomain(&model), nil
@@ -66,14 +55,13 @@ func (r *PaymentRepository) FindByID(ctx context.Context, id uuid.UUID) (*paymen
 
 func (r *PaymentRepository) FindByOrderCode(ctx context.Context, orderCode string) (*payment.Payment, error) {
 	var model PaymentModel
-	query := `SELECT * FROM payments WHERE order_code = $1`
+	result := r.db.WithContext(ctx).Where("order_code = ?", orderCode).First(&model)
 
-	err := r.db.GetContext(ctx, &model, query, orderCode)
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("payment not found")
-	}
-	if err != nil {
-		return nil, err
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, result.Error
 	}
 
 	return toDomain(&model), nil
@@ -81,14 +69,13 @@ func (r *PaymentRepository) FindByOrderCode(ctx context.Context, orderCode strin
 
 func (r *PaymentRepository) FindBySepayTransactionID(ctx context.Context, transactionID int64) (*payment.Payment, error) {
 	var model PaymentModel
-	query := `SELECT * FROM payments WHERE sepay_transaction_id = $1`
+	result := r.db.WithContext(ctx).Where("sepay_transaction_id = ?", transactionID).First(&model)
 
-	err := r.db.GetContext(ctx, &model, query, transactionID)
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("payment not found")
-	}
-	if err != nil {
-		return nil, err
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, result.Error
 	}
 
 	return toDomain(&model), nil
@@ -96,11 +83,13 @@ func (r *PaymentRepository) FindBySepayTransactionID(ctx context.Context, transa
 
 func (r *PaymentRepository) FindByUserID(ctx context.Context, userID uuid.UUID) ([]*payment.Payment, error) {
 	var models []PaymentModel
-	query := `SELECT * FROM payments WHERE user_id = $1 ORDER BY created_at DESC`
+	result := r.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Order("created_at DESC").
+		Find(&models)
 
-	err := r.db.SelectContext(ctx, &models, query, userID)
-	if err != nil {
-		return nil, err
+	if result.Error != nil {
+		return nil, result.Error
 	}
 
 	payments := make([]*payment.Payment, len(models))

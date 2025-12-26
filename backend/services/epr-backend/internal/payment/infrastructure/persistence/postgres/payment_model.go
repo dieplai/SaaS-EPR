@@ -8,30 +8,34 @@ import (
 )
 
 type PaymentModel struct {
-	ID        uuid.UUID `db:"id"`
-	UserID    uuid.UUID `db:"user_id"`
-	PackageID uuid.UUID `db:"package_id"`
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null"`
+	PackageID uuid.UUID `gorm:"type:uuid;not null"`
 
 	// Payment details
-	OrderCode string          `db:"order_code"`
-	Amount    decimal.Decimal `db:"amount"`
-	Currency  string          `db:"currency"`
-	Period    string          `db:"period"`
+	OrderCode string          `gorm:"type:varchar(50);uniqueIndex;not null"`
+	Amount    decimal.Decimal `gorm:"type:decimal(10,2);not null"`
+	Currency  string          `gorm:"type:varchar(10);not null"`
+	Period    string          `gorm:"type:varchar(20);not null"`
 
 	// SePay transaction details
-	SepayTransactionID   *int64     `db:"sepay_transaction_id"`
-	SepayReferenceCode   *string    `db:"sepay_reference_code"`
-	SepayGateway         *string    `db:"sepay_gateway"`
-	SepayAccountNumber   *string    `db:"sepay_account_number"`
-	SepayTransactionDate *time.Time `db:"sepay_transaction_date"`
-	SepayTransferContent *string    `db:"sepay_transfer_content"`
+	SepayTransactionID   *int64     `gorm:"type:bigint"`
+	SepayReferenceCode   *string    `gorm:"type:varchar(255)"`
+	SepayGateway         *string    `gorm:"type:varchar(50)"`
+	SepayAccountNumber   *string    `gorm:"type:varchar(50)"`
+	SepayTransactionDate *time.Time `gorm:"type:timestamp"`
+	SepayTransferContent *string    `gorm:"type:text"`
 
 	// Status
-	Status string `db:"status"`
+	Status string `gorm:"type:varchar(20);not null"`
 
 	// Timestamps
-	CreatedAt time.Time  `db:"created_at"`
-	UpdatedAt time.Time  `db:"updated_at"`
-	PaidAt    *time.Time `db:"paid_at"`
-	ExpiresAt time.Time  `db:"expires_at"`
+	CreatedAt time.Time  `gorm:"type:timestamp;not null"`
+	UpdatedAt time.Time  `gorm:"type:timestamp;not null"`
+	PaidAt    *time.Time `gorm:"type:timestamp"`
+	ExpiresAt time.Time  `gorm:"type:timestamp;not null"`
+}
+
+func (PaymentModel) TableName() string {
+	return "payments"
 }
