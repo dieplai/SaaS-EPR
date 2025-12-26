@@ -180,115 +180,115 @@ const Payment = () => {
                     </div>
                   </div>
 
-                {/* Payment Info */}
-                <div className="glass-card p-8">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                      <QrCode className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-display font-semibold text-foreground">
-                        Thanh toán chuyển khoản
-                      </h2>
-                      <p className="text-sm text-muted-foreground">
-                        Chuyển khoản ngân hàng nội địa
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Bank Info Card */}
-                  <div className="p-5 rounded-xl bg-muted/50 border border-border space-y-4 mb-6">
-                    <div className="flex items-center gap-3 pb-4 border-b border-border">
-                      <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                        <Building2 className="w-6 h-6 text-primary" />
+                  {/* Payment Info */}
+                  <div className="glass-card p-8">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                        <QrCode className="w-5 h-5 text-primary" />
                       </div>
                       <div>
-                        <p className="font-semibold text-foreground">{bankInfo.bank}</p>
-                        <p className="text-sm text-muted-foreground">{bankInfo.bankFull}</p>
+                        <h2 className="text-xl font-display font-semibold text-foreground">
+                          Thanh toán chuyển khoản
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                          Chuyển khoản ngân hàng nội địa
+                        </p>
                       </div>
                     </div>
 
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Số tài khoản</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-medium text-foreground">
-                            {bankInfo.accountNumber}
-                          </span>
-                          <button
-                            onClick={() => copyToClipboard(bankInfo.accountNumber, "Số tài khoản")}
-                            className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                          >
-                            <ClipboardCopy className="w-4 h-4 text-muted-foreground" />
-                          </button>
+                    {/* Bank Info Card */}
+                    <div className="p-5 rounded-xl bg-muted/50 border border-border space-y-4 mb-6">
+                      <div className="flex items-center gap-3 pb-4 border-b border-border">
+                        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                          <Building2 className="w-6 h-6 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-foreground">{bankInfo.bank}</p>
+                          <p className="text-sm text-muted-foreground">{bankInfo.bankFull}</p>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Chủ tài khoản</span>
-                        <span className="font-medium text-foreground">{bankInfo.accountName}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Số tiền</span>
-                        <span className="font-bold text-primary text-lg">
-                          {getDisplayPrice()}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Nội dung CK</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm font-medium text-foreground bg-primary/10 px-2 py-1 rounded">
-                            {bankInfo.content}
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Số tài khoản</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-medium text-foreground">
+                              {bankInfo.accountNumber}
+                            </span>
+                            <button
+                              onClick={() => copyToClipboard(bankInfo.accountNumber, "Số tài khoản")}
+                              className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                            >
+                              <ClipboardCopy className="w-4 h-4 text-muted-foreground" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Chủ tài khoản</span>
+                          <span className="font-medium text-foreground">{bankInfo.accountName}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Số tiền</span>
+                          <span className="font-bold text-primary text-lg">
+                            {getDisplayPrice()}
                           </span>
-                          <button
-                            onClick={() => copyToClipboard(bankInfo.content, "Nội dung chuyển khoản")}
-                            className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                          >
-                            <ClipboardCopy className="w-4 h-4 text-muted-foreground" />
-                          </button>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Nội dung CK</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-sm font-medium text-foreground bg-primary/10 px-2 py-1 rounded">
+                              {bankInfo.content}
+                            </span>
+                            <button
+                              onClick={() => copyToClipboard(bankInfo.content, "Nội dung chuyển khoản")}
+                              className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                            >
+                              <ClipboardCopy className="w-4 h-4 text-muted-foreground" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* QR Code */}
-                  <div className="flex flex-col items-center py-6 mb-6">
-                    <div className="w-40 h-40 rounded-xl bg-muted border-2 border-dashed border-border flex items-center justify-center mb-3">
-                      <QrCode className="w-16 h-16 text-muted-foreground" />
+                    {/* QR Code */}
+                    <div className="flex flex-col items-center py-6 mb-6">
+                      <div className="w-40 h-40 rounded-xl bg-muted border-2 border-dashed border-border flex items-center justify-center mb-3">
+                        <QrCode className="w-16 h-16 text-muted-foreground" />
+                      </div>
+                      <p className="text-sm text-muted-foreground text-center">
+                        Quét mã QR để chuyển khoản nhanh
+                      </p>
                     </div>
-                    <p className="text-sm text-muted-foreground text-center">
-                      Quét mã QR để chuyển khoản nhanh
-                    </p>
-                  </div>
 
-                  {/* Instructions */}
-                  <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 mb-6">
-                    <p className="text-sm text-amber-700 dark:text-amber-400">
-                      <strong>Lưu ý:</strong> Sau khi chuyển khoản, gói của bạn sẽ được kích hoạt
-                      trong vòng 24 giờ. Nếu cần hỗ trợ, vui lòng liên hệ hotline:{" "}
-                      <strong>1900-xxxx</strong>
-                    </p>
-                  </div>
+                    {/* Instructions */}
+                    <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 mb-6">
+                      <p className="text-sm text-amber-700 dark:text-amber-400">
+                        <strong>Lưu ý:</strong> Sau khi chuyển khoản, gói của bạn sẽ được kích hoạt
+                        trong vòng 24 giờ. Nếu cần hỗ trợ, vui lòng liên hệ hotline:{" "}
+                        <strong>1900-xxxx</strong>
+                      </p>
+                    </div>
 
-                  {/* Actions */}
-                  <div className="flex gap-3">
-                    <Link to="/pricing" className="flex-1">
-                      <Button variant="outline" className="w-full">
-                        Hủy bỏ
+                    {/* Actions */}
+                    <div className="flex gap-3">
+                      <Link to="/pricing" className="flex-1">
+                        <Button variant="outline" className="w-full">
+                          Hủy bỏ
+                        </Button>
+                      </Link>
+                      <Button
+                        className="flex-1"
+                        onClick={() => {
+                          toast({
+                            title: "Cảm ơn bạn!",
+                            description: "Chúng tôi sẽ xác nhận thanh toán trong vòng 24 giờ.",
+                          });
+                        }}
+                      >
+                        Đã chuyển khoản
                       </Button>
-                    </Link>
-                    <Button
-                      className="flex-1"
-                      onClick={() => {
-                        toast({
-                          title: "Cảm ơn bạn!",
-                          description: "Chúng tôi sẽ xác nhận thanh toán trong vòng 24 giờ.",
-                        });
-                      }}
-                    >
-                      Đã chuyển khoản
-                    </Button>
+                    </div>
                   </div>
-                </div>
               )}
             </div>
           </div>
