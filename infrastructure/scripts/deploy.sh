@@ -188,24 +188,22 @@ else
   DB_USER="epr_staging"
 fi
 
-# Check if schema_migrations table exists and has version >= 1
-# This happens when database was synced from production (already has full schema)
+# Check current migration version
 MIGRATION_VERSION=$(docker exec epr-postgres psql -U "$DB_USER" -d "$DB_NAME" -t -c \
   "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1;" 2>/dev/null | xargs || echo "0")
 
-if [ "$MIGRATION_VERSION" -ge 1 ]; then
-  echo -e "${GREEN}OK: Database already migrated (version: $MIGRATION_VERSION, synced from production)${NC}"
-  echo -e "${YELLOW}INFO: Skipping migrations (schema already up-to-date)${NC}"
+echo -e "${YELLOW}Current migration version: $MIGRATION_VERSION${NC}"
+
+# Always run migrations to ensure database is up-to-date
+# golang-migrate is idempotent and will only apply new migrations
+if "$PROJECT_ROOT/infrastructure/scripts/db/migrate.sh" "$ENV" up; then
+  NEW_VERSION=$(docker exec epr-postgres psql -U "$DB_USER" -d "$DB_NAME" -t -c \
+    "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1;" 2>/dev/null | xargs || echo "0")
+  echo -e "${GREEN}OK: Database migrations completed (version: $MIGRATION_VERSION -> $NEW_VERSION)${NC}"
 else
-  # Run migrations if version is 0 or table doesn't exist
-  echo -e "${YELLOW}Running migrations from version $MIGRATION_VERSION${NC}"
-  if "$PROJECT_ROOT/infrastructure/scripts/db/migrate.sh" "$ENV" up; then
-    echo -e "${GREEN}OK: Database migrations completed${NC}"
-  else
-    echo -e "${RED}ERROR: Database migrations failed - rolling back${NC}"
-    "$PROJECT_ROOT/infrastructure/scripts/ops/rollback.sh" "$ENV"
-    exit 1
-  fi
+  echo -e "${RED}ERROR: Database migrations failed - rolling back${NC}"
+  "$PROJECT_ROOT/infrastructure/scripts/ops/rollback.sh" "$ENV"
+  exit 1
 fi
 
 # Seed initial data (idempotent)
