@@ -44,7 +44,7 @@ func (h *CreatePaymentHandler) Handle(ctx context.Context, cmd CreatePaymentComm
 	}
 
 	// Calculate amount based on period
-	amount := decimal.NewFromInt(int64(pkg.GetPrice()))
+	amount := decimal.NewFromFloat(pkg.GetPrice().Amount())
 	if cmd.Period == "yearly" {
 		// Yearly = 12 months with 20% discount
 		amount = amount.Mul(decimal.NewFromInt(12)).Mul(decimal.NewFromFloat(0.8))
