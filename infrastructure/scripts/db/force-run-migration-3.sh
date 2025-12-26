@@ -30,23 +30,64 @@ if [ "$TABLE_EXISTS" = "t" ] || [ "$TABLE_EXISTS" = "true" ]; then
   echo -e "${GREEN}OK: Old payments table dropped${NC}"
 fi
 
-# Force migration to version 2
-echo -e "${YELLOW}[2/5] Forcing migration version to 2${NC}"
-docker exec epr-backend-prod migrate \
-  -path /migrations \
-  -database "postgresql://${DB_USER}:${POSTGRES_PASSWORD}@epr-postgres:5432/${DB_NAME}?sslmode=disable" \
-  force 2
+# Create payments table directly
+echo -e "${YELLOW}[2/5] Creating payments table${NC}"
+docker exec epr-postgres psql -U "$DB_USER" -d "$DB_NAME" << 'EOSQL'
+CREATE TABLE IF NOT EXISTS payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    package_id UUID NOT NULL REFERENCES packages(id) ON DELETE RESTRICT,
 
-echo -e "${GREEN}OK: Forced to version 2${NC}"
+    -- Payment details
+    order_code VARCHAR(50) UNIQUE NOT NULL,
+    amount DECIMAL(15,2) NOT NULL CHECK (amount > 0),
+    currency VARCHAR(3) DEFAULT 'VND',
+    period VARCHAR(10) NOT NULL CHECK (period IN ('monthly', 'yearly')),
 
-# Run migration 3
-echo -e "${YELLOW}[3/5] Running migration 3 (create payments table)${NC}"
-docker exec epr-backend-prod migrate \
-  -path /migrations \
-  -database "postgresql://${DB_USER}:${POSTGRES_PASSWORD}@epr-postgres:5432/${DB_NAME}?sslmode=disable" \
-  up 1
+    -- SePay transaction details (filled by webhook)
+    sepay_transaction_id BIGINT UNIQUE,
+    sepay_reference_code VARCHAR(100),
+    sepay_gateway VARCHAR(50),
+    sepay_account_number VARCHAR(50),
+    sepay_transaction_date TIMESTAMP,
+    sepay_transfer_content TEXT,
 
-echo -e "${GREEN}OK: Migration 3 applied${NC}"
+    -- Payment status
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed', 'cancelled', 'refunded')),
+
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    paid_at TIMESTAMP,
+    expires_at TIMESTAMP,
+
+    -- Indexes for performance
+    CONSTRAINT fk_payments_user FOREIGN KEY (user_id) REFERENCES users(id),
+    CONSTRAINT fk_payments_package FOREIGN KEY (package_id) REFERENCES packages(id)
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
+CREATE INDEX IF NOT EXISTS idx_payments_order_code ON payments(order_code);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+CREATE INDEX IF NOT EXISTS idx_payments_sepay_transaction_id ON payments(sepay_transaction_id);
+CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments(created_at DESC);
+
+-- Trigger
+CREATE TRIGGER trigger_payments_updated_at
+BEFORE UPDATE ON payments
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_updated_at();
+EOSQL
+
+echo -e "${GREEN}OK: Payments table created${NC}"
+
+# Update migration version to 3
+echo -e "${YELLOW}[3/5] Updating migration version to 3${NC}"
+docker exec epr-postgres psql -U "$DB_USER" -d "$DB_NAME" -c \
+  "UPDATE schema_migrations SET version = 3, dirty = false WHERE version = 2;"
+
+echo -e "${GREEN}OK: Migration version updated to 3${NC}"
 
 # Verify payments table
 echo -e "${YELLOW}[4/5] Verifying payments table structure${NC}"
