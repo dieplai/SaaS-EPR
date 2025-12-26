@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Recycle, Twitter, Linkedin, Github, Mail } from "lucide-react";
+import { Twitter, Linkedin, Github, Mail } from "lucide-react";
 
 const Footer = () => {
   const { t } = useTranslation();
@@ -42,12 +42,9 @@ const Footer = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8 lg:gap-12">
           <div className="col-span-2">
             <Link to="/" className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                <Recycle className="w-6 h-6 text-primary-foreground" />
+              <div className="h-10">
+                <img src="/logo.png" alt="EPR AI" className="h-full w-auto object-contain" />
               </div>
-              <span className="text-xl font-display font-bold text-foreground">
-                EPR AI
-              </span>
             </Link>
             <p className="text-muted-foreground text-sm mb-6 max-w-xs">
               {t('footer.description')}

@@ -160,14 +160,14 @@ const ProblemSolutionSection = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} className="py-32 md:py-40 relative overflow-hidden bg-background">
+    <section ref={sectionRef} className="pt-32 md:pt-40 pb-8 md:pb-12 relative overflow-hidden bg-background">
       <div className="absolute inset-0 opacity-30">
         <div className="absolute top-1/4 left-0 w-96 h-96 bg-destructive/5 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
       </div>
 
       <div className="container mx-auto px-4 md:px-6 relative">
-        <div className="section-header text-center mb-20 md:mb-28">
+        <div className="section-header text-center mb-16 md:mb-20">
           <div className="overflow-hidden">
             <h2 className="text-4xl md:text-6xl lg:text-7xl font-display font-bold tracking-tight">
               <span className="section-title-word inline-block text-muted-foreground/40">{t('problemSolution.title1')}</span>{" "}
@@ -256,8 +256,8 @@ const ProblemSolutionSection = () => {
           </div>
         </div>
 
-        <div className="mt-20 flex justify-center">
-          <div className="w-px h-16 bg-gradient-to-b from-border to-transparent" />
+        <div className="mt-6 flex justify-center">
+          <div className="w-px h-8 bg-gradient-to-b from-border to-transparent" />
         </div>
       </div>
     </section>

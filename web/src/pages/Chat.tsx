@@ -108,7 +108,7 @@ const Chat = () => {
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved === 'dark';
-    return !document.documentElement.classList.contains('light');
+    return false; // Default to light mode
   });
   const [notifications, setNotifications] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1119,14 +1119,14 @@ const Chat = () => {
         {/* Chat Area - Scrollable */}
         <main className="flex-1 flex flex-col min-h-0">
           <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-            <div className="max-w-3xl mx-auto px-4 py-6 pb-4">
+            <div className="max-w-4xl mx-auto px-4 py-6 pb-4">
               {messages.length === 0 ? (
                 /* Empty State */
                 <div className="flex-1 flex flex-col items-center justify-center text-center min-h-[60vh]">
-                  <h1 className="text-3xl font-display font-bold text-foreground mb-3">
+                  <h1 className="text-4xl font-display font-bold text-foreground mb-3">
                     Tôi có thể giúp gì cho bạn?
                   </h1>
-                  <p className="text-muted-foreground max-w-md mb-10">
+                  <p className="text-lg text-muted-foreground max-w-md mb-10">
                     Hỏi tôi bất cứ điều gì về quy định và tuân thủ EPR
                   </p>
 
@@ -1138,7 +1138,7 @@ const Chat = () => {
                         onClick={() => handleSuggestedQuestion(question)}
                         className="p-4 text-left border border-border rounded-xl hover:bg-muted/50 hover:border-primary/30 transition-colors group"
                       >
-                        <span className="text-sm text-foreground/80 group-hover:text-foreground transition-colors">
+                        <span className="text-base text-foreground/80 group-hover:text-foreground transition-colors">
                           {question}
                         </span>
                       </button>
@@ -1151,12 +1151,12 @@ const Chat = () => {
                   {messages.map((message) => (
                     <div
                       key={message.id}
-                      className={`flex gap-4 ${
+                      className={`flex gap-2 ${
                         message.role === "user" ? "justify-end" : "justify-start"
                       }`}
                     >
                       {message.role === "assistant" && (
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shrink-0 p-1">
+                        <div className="w-12 h-12 flex items-center justify-center shrink-0">
                           <img src="/logo_chatbot.png" alt="AI" className="w-full h-full object-contain" />
                         </div>
                       )}
@@ -1167,7 +1167,7 @@ const Chat = () => {
                       >
                         {/* Show thinking status if message is empty and status exists */}
                         {message.role === "assistant" && !message.content && thinkingStatus && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground italic py-2">
+                          <div className="flex items-center gap-2 text-base text-muted-foreground italic py-2">
                             <div className="flex gap-1">
                               <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" />
                               <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce [animation-delay:0.1s]" />
@@ -1180,14 +1180,14 @@ const Chat = () => {
                         {/* Show message content */}
                         {message.content && (
                         <div
-                          className={`rounded-2xl px-4 py-3 ${
+                          className={`rounded-2xl px-5 py-4 ${
                             message.role === "user"
                               ? "bg-primary text-primary-foreground"
                               : ""
                           }`}
                         >
                           <div
-                            className={`prose prose-sm max-w-none ${
+                            className={`prose prose-base max-w-none ${
                               message.role === "user"
                                 ? "prose-invert"
                                 : ""
@@ -1196,14 +1196,14 @@ const Chat = () => {
                             {message.content.split("\n").map((line, i) => {
                               if (line.startsWith("## ")) {
                                 return (
-                                  <h3 key={i} className="text-base font-display font-semibold mb-2 mt-0">
+                                  <h3 key={i} className="text-lg font-display font-semibold mb-2 mt-0">
                                     {line.replace("## ", "")}
                                   </h3>
                                 );
                               }
                               if (line.startsWith("### ")) {
                                 return (
-                                  <h4 key={i} className="font-semibold mt-3 mb-1.5 text-sm">
+                                  <h4 key={i} className="font-semibold mt-3 mb-1.5 text-base">
                                     {line.replace("### ", "")}
                                   </h4>
                                 );
@@ -1211,7 +1211,7 @@ const Chat = () => {
                               if (line.startsWith("- **")) {
                                 const parts = line.replace("- **", "").split("**");
                                 return (
-                                  <p key={i} className="flex items-start gap-2 my-1 text-sm">
+                                  <p key={i} className="flex items-start gap-2 my-1 text-base">
                                     <span className="text-primary">•</span>
                                     <span>
                                       <strong>{parts[0]}</strong>
@@ -1224,7 +1224,7 @@ const Chat = () => {
                                 const match = line.match(/^(\d+)\. \*\*(.+?)\*\*(.*)$/);
                                 if (match) {
                                   return (
-                                    <p key={i} className="flex items-start gap-2 my-1 text-sm">
+                                    <p key={i} className="flex items-start gap-2 my-1 text-base">
                                       <span className="text-primary font-medium">{match[1]}.</span>
                                       <span>
                                         <strong>{match[2]}</strong>
@@ -1234,7 +1234,7 @@ const Chat = () => {
                                   );
                                 }
                               }
-                              return line ? <p key={i} className="my-1.5 text-sm">{line}</p> : <br key={i} />;
+                              return line ? <p key={i} className="my-1.5 text-base">{line}</p> : <br key={i} />;
                             })}
                           </div>
                         </div>
@@ -1259,8 +1259,8 @@ const Chat = () => {
                         )}
                       </div>
                       {message.role === "user" && (
-                        <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                          <User className="w-4 h-4 text-muted-foreground" />
+                        <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                          <User className="w-5 h-5 text-muted-foreground" />
                         </div>
                       )}
                     </div>
@@ -1274,7 +1274,7 @@ const Chat = () => {
 
           {/* Input Area - Fixed at bottom */}
           <div className="border-t border-border bg-background p-4 shrink-0">
-            <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
+            <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
               <div className="relative flex items-center gap-2 p-2 bg-muted/50 rounded-xl border border-border focus-within:border-primary/50 transition-colors">
                 <input
                   ref={inputRef}

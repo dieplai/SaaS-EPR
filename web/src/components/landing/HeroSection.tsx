@@ -90,7 +90,6 @@ const HeroSection = () => {
           className="hero-bg absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url(${heroBg})` }}
         />
-        <div className="absolute inset-0 bg-background/80" />
         <div className="absolute inset-0 mesh-bg" />
         <div className="absolute inset-0 grid-pattern opacity-30" />
       </div>
