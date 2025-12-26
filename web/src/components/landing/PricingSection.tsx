@@ -140,6 +140,10 @@ const PricingSection = () => {
 
   // Animate price change
   useEffect(() => {
+    // Check if elements exist before animating
+    const elements = document.querySelectorAll(".price-display");
+    if (elements.length === 0) return;
+
     gsap.fromTo(
       ".price-display",
       { opacity: 0, y: -10 },
