@@ -76,10 +76,14 @@ const Payment = () => {
 
         // Create payment order
         setIsCreatingPayment(true);
-        const response = await apiClient.post<PaymentData>("/payments", {
-          package_id: planId,
-          period: period,
-        });
+        const response = await apiClient.post<PaymentData>(
+          "/api/v1/payments",
+          {
+            package_id: planId,
+            period: period,
+          },
+          true // requiresAuth
+        );
         setPaymentData(response);
         setIsCreatingPayment(false);
       } catch (error) {
@@ -105,7 +109,8 @@ const Payment = () => {
     const pollInterval = setInterval(async () => {
       try {
         const response = await apiClient.get<{ data: PaymentData }>(
-          `/payments/${paymentData.payment_id}`
+          `/api/v1/payments/${paymentData.payment_id}`,
+          true // requiresAuth
         );
 
         if (response.data.status === "completed") {
