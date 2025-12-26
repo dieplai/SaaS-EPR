@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { adminApiClient } from "@/lib/admin-api-client";
 import { apiClient } from "@/lib/api-client";
-import { formatPrice } from "@/lib/currency";
+import { formatPrice, formatVND } from "@/lib/currency";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
@@ -217,7 +217,7 @@ const Payment = () => {
                     <div className="mb-6 p-4 rounded-xl bg-primary/5 border border-primary/20">
                       <div className="flex items-baseline gap-2 mb-1">
                         <span className="text-4xl font-display font-bold text-foreground">
-                          {formatPrice(parseFloat(paymentData.amount), "vi")}
+                          {formatVND(parseFloat(paymentData.amount))}
                         </span>
                         <span className="text-muted-foreground">
                           /{paymentData.period === "yearly" ? "năm" : "tháng"}
@@ -308,7 +308,7 @@ const Payment = () => {
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">Số tiền</span>
                           <span className="font-bold text-primary text-lg">
-                            {formatPrice(parseFloat(paymentData.amount), "vi")}
+                            {formatVND(parseFloat(paymentData.amount))}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">

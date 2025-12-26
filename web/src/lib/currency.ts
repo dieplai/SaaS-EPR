@@ -23,3 +23,8 @@ export const formatYearlyPrice = (monthlyPriceUSD: number, language: string): st
     return `$${yearlyPriceUSD.toFixed(2)}`;
   }
 };
+
+// Format VND amount that's already in VND (no conversion needed)
+export const formatVND = (amountVND: number): string => {
+  return `${Math.round(amountVND).toLocaleString('vi-VN')}đ`;
+};
