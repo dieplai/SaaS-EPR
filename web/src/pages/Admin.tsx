@@ -45,12 +45,12 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { adminApiClient, AdminPackage, TokenResetSettings, FreeAccountSettings } from "@/lib/admin-api-client";
+import { adminApiClient, AdminPackage, TokenResetSettings, FreeAccountSettings, AdminUser, CreateUserRequest } from "@/lib/admin-api-client";
 
 const Admin = () => {
   const { logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<"overview" | "packages" | "settings">("overview");
+  const [activeSection, setActiveSection] = useState<"overview" | "packages" | "settings" | "users">("overview");
   const { toast } = useToast();
 
   // Loading states
@@ -82,6 +82,17 @@ const Admin = () => {
     token_limit: 50,
   });
 
+  // User Management State
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
+  const [userForm, setUserForm] = useState<CreateUserRequest>({
+    email: "",
+    password: "",
+    full_name: "",
+    role: "user",
+  });
+
   // Load packages from API
   useEffect(() => {
     loadPackages();
@@ -91,6 +102,13 @@ const Admin = () => {
   useEffect(() => {
     if (activeSection === "settings") {
       loadSettings();
+    }
+  }, [activeSection]);
+
+  // Load users from API when users section is active
+  useEffect(() => {
+    if (activeSection === "users") {
+      loadUsers();
     }
   }, [activeSection]);
 
@@ -132,6 +150,23 @@ const Admin = () => {
     }
   };
 
+  const loadUsers = async () => {
+    try {
+      setIsLoadingUsers(true);
+      const data = await adminApiClient.users.list();
+      setUsers(data);
+    } catch (error: any) {
+      console.error("Failed to load users:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load users",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
   // Stats - Calculate from real data
   const activePackages = packages.filter(p => p.is_active).length;
   const totalTokensAvailable = packages.reduce((sum, p) => sum + p.token_limit, 0);
@@ -150,7 +185,7 @@ const Admin = () => {
     { id: "overview", icon: LayoutDashboard, label: "Overview" },
     { id: "packages", icon: Package, label: "Packages" },
     { id: "settings", icon: SettingsIcon, label: "Settings" },
-    { id: "users", icon: Users, label: "Users", disabled: true },
+    { id: "users", icon: Users, label: "Users" },
   ];
 
   const handleEditPackage = (pkg: AdminPackage) => {
@@ -240,6 +275,59 @@ const Admin = () => {
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // User Management Handlers
+  const handleCreateUser = async () => {
+    try {
+      setIsSaving(true);
+      await adminApiClient.users.create(userForm);
+      toast({ title: "User Created", description: "User created successfully." });
+      setIsUserDialogOpen(false);
+      setUserForm({ email: "", password: "", full_name: "", role: "user" });
+      await loadUsers();
+    } catch (error: any) {
+      console.error("Failed to create user:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create user",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleChangeUserRole = async (userId: string, newRole: 'user' | 'admin' | 'manager') => {
+    try {
+      await adminApiClient.users.changeRole(userId, { role: newRole });
+      toast({ title: "Role Changed", description: "User role updated successfully." });
+      await loadUsers();
+    } catch (error: any) {
+      console.error("Failed to change role:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to change role",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm("Are you sure you want to delete this user?")) return;
+
+    try {
+      await adminApiClient.users.delete(userId);
+      toast({ title: "User Deleted", description: "User deleted successfully." });
+      await loadUsers();
+    } catch (error: any) {
+      console.error("Failed to delete user:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete user",
+        variant: "destructive",
+      });
     }
   };
 
@@ -642,6 +730,99 @@ const Admin = () => {
               )}
             </div>
           )}
+
+          {/* Users Section */}
+          {activeSection === "users" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <p className="text-muted-foreground">
+                  Manage user accounts and permissions
+                </p>
+                <Button
+                  onClick={() => setIsUserDialogOpen(true)}
+                  className="gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create User
+                </Button>
+              </div>
+
+              {isLoadingUsers ? (
+                <div className="glass-card p-12 flex items-center justify-center">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                <div className="glass-card overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent border-border">
+                        <TableHead className="font-semibold">User</TableHead>
+                        <TableHead className="font-semibold">Email</TableHead>
+                        <TableHead className="font-semibold">Role</TableHead>
+                        <TableHead className="font-semibold">Status</TableHead>
+                        <TableHead className="font-semibold">Created</TableHead>
+                        <TableHead className="font-semibold text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {users.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            No users found.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        users.map((user) => (
+                          <TableRow key={user.id} className="border-border">
+                            <TableCell>
+                              <div>
+                                <p className="font-medium text-foreground">{user.full_name}</p>
+                                <p className="text-sm text-muted-foreground">{user.company_name || "No company"}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-foreground">{user.email}</span>
+                            </TableCell>
+                            <TableCell>
+                              <select
+                                value={user.role}
+                                onChange={(e) => handleChangeUserRole(user.id, e.target.value as any)}
+                                className="px-3 py-1 rounded-md border border-border bg-background text-foreground"
+                              >
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                                <option value="manager">Manager</option>
+                              </select>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={user.is_active ? "default" : "secondary"}>
+                                {user.is_active ? "Active" : "Inactive"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-foreground text-sm">
+                                {new Date(user.created_at).toLocaleDateString()}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteUser(user.id)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Recycle className="w-4 h-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </main>
 
@@ -781,6 +962,78 @@ const Admin = () => {
             <Button onClick={handleSavePackage} className="gap-2" disabled={isSaving}>
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Update Package
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* User Dialog */}
+      <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-display">
+              Create New User
+            </DialogTitle>
+            <DialogDescription>
+              Create a new user account with specified role
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="user-email">Email</Label>
+              <Input
+                id="user-email"
+                type="email"
+                value={userForm.email}
+                onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                placeholder="user@example.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="user-password">Password</Label>
+              <Input
+                id="user-password"
+                type="password"
+                value={userForm.password}
+                onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                placeholder="Min. 8 characters"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="user-name">Full Name</Label>
+              <Input
+                id="user-name"
+                value={userForm.full_name}
+                onChange={(e) => setUserForm({ ...userForm, full_name: e.target.value })}
+                placeholder="John Doe"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="user-role">Role</Label>
+              <select
+                id="user-role"
+                value={userForm.role}
+                onChange={(e) => setUserForm({ ...userForm, role: e.target.value as any })}
+                className="w-full px-3 py-2 rounded-md border border-border bg-background text-foreground"
+              >
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+                <option value="manager">Manager</option>
+              </select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsUserDialogOpen(false)} disabled={isSaving}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateUser} className="gap-2" disabled={isSaving}>
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              Create User
             </Button>
           </DialogFooter>
         </DialogContent>

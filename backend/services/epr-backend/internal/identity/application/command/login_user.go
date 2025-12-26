@@ -17,6 +17,7 @@ type LoginUserResult struct {
 	UserID   uuid.UUID
 	Email    string
 	FullName string
+	Role     string
 }
 
 type LoginUserHandler struct {
@@ -53,5 +54,6 @@ func (h *LoginUserHandler) Handle(ctx context.Context, cmd LoginUserCommand) (*L
 		UserID:   foundUser.GetID(),
 		Email:    foundUser.GetEmail().String(),
 		FullName: foundUser.GetFullName(),
+		Role:     string(foundUser.GetRole()),
 	}, nil
 }

@@ -33,6 +33,39 @@ export interface FreeAccountSettings {
   token_limit: number;
 }
 
+export interface AdminUser {
+  id: string;
+  email: string;
+  full_name: string;
+  phone?: string;
+  company_name?: string;
+  avatar_url?: string;
+  role: 'user' | 'admin' | 'manager';
+  is_active: boolean;
+  is_verified: boolean;
+  last_login_at?: string;
+  email_verified_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateUserRequest {
+  email: string;
+  password: string;
+  full_name: string;
+  role?: 'user' | 'admin' | 'manager';
+}
+
+export interface UpdateUserRequest {
+  full_name?: string;
+  phone?: string;
+  company?: string;
+}
+
+export interface ChangeRoleRequest {
+  role: 'user' | 'admin' | 'manager';
+}
+
 export const adminApiClient = {
   // Package Management
   packages: {
@@ -82,6 +115,31 @@ export const adminApiClient = {
       update: async (data: FreeAccountSettings): Promise<void> => {
         await apiClient.put<any>('/api/v1/admin/settings/free-account', data, true);
       },
+    },
+  },
+
+  // User Management
+  users: {
+    list: async (): Promise<AdminUser[]> => {
+      const response = await apiClient.get<any>('/api/v1/admin/users', true);
+      return response.data || response;
+    },
+
+    create: async (data: CreateUserRequest): Promise<{ user_id: string }> => {
+      const response = await apiClient.post<any>('/api/v1/admin/users', data, true);
+      return response;
+    },
+
+    update: async (id: string, data: UpdateUserRequest): Promise<void> => {
+      await apiClient.put<any>(`/api/v1/admin/users/${id}`, data, true);
+    },
+
+    changeRole: async (id: string, data: ChangeRoleRequest): Promise<void> => {
+      await apiClient.patch<any>(`/api/v1/admin/users/${id}/role`, data, true);
+    },
+
+    delete: async (id: string): Promise<void> => {
+      await apiClient.delete<any>(`/api/v1/admin/users/${id}`, true);
     },
   },
 };

@@ -83,7 +83,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	// Auto-login: Generate tokens for the newly registered user
-	accessToken, err := h.jwtService.GenerateAccessToken(userID, req.Email)
+	// New users always get "user" role by default
+	accessToken, err := h.jwtService.GenerateAccessToken(userID, req.Email, "user")
 	if err != nil {
 		c.JSON(http.StatusCreated, gin.H{
 			"message": "user registered successfully but auto-login failed",
@@ -92,7 +93,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	refreshToken, err := h.jwtService.GenerateRefreshToken(userID, req.Email)
+	refreshToken, err := h.jwtService.GenerateRefreshToken(userID, req.Email, "user")
 	if err != nil {
 		c.JSON(http.StatusCreated, gin.H{
 			"message": "user registered successfully but auto-login failed",
@@ -152,8 +153,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Generate tokens
-	accessToken, err := h.jwtService.GenerateAccessToken(result.UserID, result.Email)
+	// Generate tokens with user role
+	accessToken, err := h.jwtService.GenerateAccessToken(result.UserID, result.Email, result.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to generate access token",
@@ -161,7 +162,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	refreshToken, err := h.jwtService.GenerateRefreshToken(result.UserID, result.Email)
+	refreshToken, err := h.jwtService.GenerateRefreshToken(result.UserID, result.Email, result.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to generate refresh token",
@@ -227,8 +228,8 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	// Generate new access token
-	accessToken, err := h.jwtService.GenerateAccessToken(claims.UserID, claims.Email)
+	// Generate new access token with same role from refresh token
+	accessToken, err := h.jwtService.GenerateAccessToken(claims.UserID, claims.Email, claims.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to generate access token",

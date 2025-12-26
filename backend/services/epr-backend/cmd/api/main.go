@@ -83,6 +83,13 @@ func main() {
 	consumeTokensHandler := subscriptioncommand.NewConsumeTokensHandler(subscriptionRepo, packageRepo)
 	getSubscriptionHandler := subscriptionquery.NewGetSubscriptionHandler(subscriptionRepo, packageRepo)
 
+	// User management handlers (admin) - depends on createSubscriptionHandler
+	listUsersHandler := identityquery.NewListUsersHandler(userRepo)
+	createUserAdminHandler := command.NewCreateUserAdminHandler(userRepo, createSubscriptionHandler)
+	updateUserHandler := command.NewUpdateUserHandler(userRepo)
+	deleteUserHandler := command.NewDeleteUserHandler(userRepo)
+	changeUserRoleHandler := command.NewChangeUserRoleHandler(userRepo)
+
 	// Token reset handlers
 	processTokenResetsHandler := subscriptioncommand.NewProcessTokenResetsHandler(subscriptionRepo, systemSettingsRepo)
 	getTokenResetSettingsHandler := subscriptionquery.NewGetTokenResetSettingsHandler(systemSettingsRepo)
@@ -145,6 +152,13 @@ func main() {
 		packageRepo,
 	)
 	userHandler := identityhandler.NewUserHandler(getUserProfileHandler)
+	userManagementHandler := identityhandler.NewUserManagementHandler(
+		listUsersHandler,
+		createUserAdminHandler,
+		updateUserHandler,
+		deleteUserHandler,
+		changeUserRoleHandler,
+	)
 
 	packageHandler := subscriptionhandler.NewPackageHandler(
 		createPackageHandler,
@@ -176,6 +190,7 @@ func main() {
 	)
 
 	authMiddleware := middleware.NewAuthMiddleware(jwtService)
+	adminMiddleware := middleware.NewAdminMiddleware(authMiddleware)
 
 	router := setupRouter(cfg.Server.Env)
 	router.Use(middleware.ErrorHandler())
@@ -188,7 +203,7 @@ func main() {
 		})
 	})
 
-	identityhttp.RegisterRoutes(router, authHandler, userHandler, authMiddleware)
+	identityhttp.RegisterRoutes(router, authHandler, userHandler, userManagementHandler, authMiddleware, adminMiddleware)
 	subscriptionhttp.RegisterRoutes(router, packageHandler, subscriptionHandler, settingsHandler, authMiddleware)
 	paymenthttp.RegisterRoutes(router, paymentHandler, webhookHandler, authMiddleware)
 

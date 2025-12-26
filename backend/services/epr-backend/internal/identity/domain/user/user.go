@@ -44,9 +44,10 @@ type User struct {
 }
 
 var (
-	ErrUserInactive       = errors.New("user is inactive")
-	ErrUserNotVerified    = errors.New("user email not verified")
-	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrUserInactive        = errors.New("user is inactive")
+	ErrUserNotVerified     = errors.New("user email not verified")
+	ErrInvalidCredentials  = errors.New("invalid credentials")
+	ErrEmailAlreadyExists  = errors.New("email already exists")
 )
 
 func NewUser(email Email, password Password, fullName string) (*User, error) {
@@ -62,6 +63,33 @@ func NewUser(email Email, password Password, fullName string) (*User, error) {
 		password:   password,
 		fullName:   fullName,
 		role:       RoleUser, // Default role for new users
+		isActive:   true,
+		isVerified: false,
+	}
+
+	user.RaiseDomainEvent(events.NewUserRegistered(user.ID, user.email.String(), user.fullName))
+
+	return user, nil
+}
+
+// NewUserWithRole creates a new user with a specified role (for admin operations)
+func NewUserWithRole(email Email, password Password, fullName string, role Role) (*User, error) {
+	if fullName == "" {
+		return nil, errors.New("full name is required")
+	}
+
+	if !role.IsValid() {
+		return nil, errors.New("invalid role")
+	}
+
+	user := &User{
+		AggregateRoot: domain.AggregateRoot{
+			BaseEntity: domain.NewBaseEntity(),
+		},
+		email:      email,
+		password:   password,
+		fullName:   fullName,
+		role:       role,
 		isActive:   true,
 		isVerified: false,
 	}

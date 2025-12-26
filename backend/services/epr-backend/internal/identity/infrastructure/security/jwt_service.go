@@ -17,6 +17,7 @@ type JWTService struct {
 type Claims struct {
 	UserID uuid.UUID `json:"user_id"`
 	Email  string    `json:"email"`
+	Role   string    `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -28,10 +29,11 @@ func NewJWTService(secret string, accessExpMinutes, refreshExpHours int) *JWTSer
 	}
 }
 
-func (s *JWTService) GenerateAccessToken(userID uuid.UUID, email string) (string, error) {
+func (s *JWTService) GenerateAccessToken(userID uuid.UUID, email string, role string) (string, error) {
 	claims := Claims{
 		UserID: userID,
 		Email:  email,
+		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.accessExpiration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -44,10 +46,11 @@ func (s *JWTService) GenerateAccessToken(userID uuid.UUID, email string) (string
 	return token.SignedString([]byte(s.secret))
 }
 
-func (s *JWTService) GenerateRefreshToken(userID uuid.UUID, email string) (string, error) {
+func (s *JWTService) GenerateRefreshToken(userID uuid.UUID, email string, role string) (string, error) {
 	claims := Claims{
 		UserID: userID,
 		Email:  email,
+		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.refreshExpiration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

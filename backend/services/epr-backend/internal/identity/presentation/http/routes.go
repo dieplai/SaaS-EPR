@@ -10,7 +10,9 @@ func RegisterRoutes(
 	router *gin.Engine,
 	authHandler *handler.AuthHandler,
 	userHandler *handler.UserHandler,
+	userManagementHandler *handler.UserManagementHandler,
 	authMiddleware *middleware.AuthMiddleware,
+	adminMiddleware *middleware.AdminMiddleware,
 ) {
 	api := router.Group("/api/v1")
 	{
@@ -26,6 +28,18 @@ func RegisterRoutes(
 		users.Use(authMiddleware.RequireAuth())
 		{
 			users.GET("/profile", userHandler.GetProfile)
+		}
+
+		// Admin routes - user management
+		admin := api.Group("/admin")
+		admin.Use(authMiddleware.RequireAuth())
+		admin.Use(adminMiddleware.RequireAdmin())
+		{
+			admin.GET("/users", userManagementHandler.ListUsers)
+			admin.POST("/users", userManagementHandler.CreateUser)
+			admin.PUT("/users/:id", userManagementHandler.UpdateUser)
+			admin.DELETE("/users/:id", userManagementHandler.DeleteUser)
+			admin.PATCH("/users/:id/role", userManagementHandler.ChangeUserRole)
 		}
 	}
 }

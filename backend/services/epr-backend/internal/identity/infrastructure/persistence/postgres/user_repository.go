@@ -51,6 +51,26 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email user.Email) (*us
 	return r.toDomain(&model)
 }
 
+func (r *UserRepository) FindAll(ctx context.Context) ([]*user.User, error) {
+	var models []UserModel
+	result := r.db.WithContext(ctx).Order("created_at DESC").Find(&models)
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	users := make([]*user.User, len(models))
+	for i, model := range models {
+		u, err := r.toDomain(&model)
+		if err != nil {
+			return nil, err
+		}
+		users[i] = u
+	}
+
+	return users, nil
+}
+
 func (r *UserRepository) Exists(ctx context.Context, email user.Email) (bool, error) {
 	var count int64
 	result := r.db.WithContext(ctx).Model(&UserModel{}).
