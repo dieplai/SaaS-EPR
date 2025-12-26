@@ -208,16 +208,23 @@ if [ "$DIRTY_STATE" = "t" ] || [ "$DIRTY_STATE" = "true" ]; then
     exit 1
   fi
 else
-  # Always run migrations to ensure database is up-to-date
-  # golang-migrate is idempotent and will only apply new migrations
-  if "$PROJECT_ROOT/infrastructure/scripts/db/migrate.sh" "$ENV" up; then
-    NEW_VERSION=$(docker exec epr-postgres psql -U "$DB_USER" -d "$DB_NAME" -t -c \
-      "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1;" 2>/dev/null | xargs || echo "0")
-    echo -e "${GREEN}OK: Database migrations completed (version: $MIGRATION_VERSION -> $NEW_VERSION)${NC}"
+  # Check if migration version matches expected version (3)
+  EXPECTED_VERSION=3
+  if [ "$MIGRATION_VERSION" = "$EXPECTED_VERSION" ]; then
+    echo -e "${GREEN}OK: Database already at expected version $EXPECTED_VERSION, skipping migrations${NC}"
   else
-    echo -e "${RED}ERROR: Database migrations failed - rolling back${NC}"
-    "$PROJECT_ROOT/infrastructure/scripts/ops/rollback.sh" "$ENV"
-    exit 1
+    # Run migrations to ensure database is up-to-date
+    # golang-migrate is idempotent and will only apply new migrations
+    echo -e "${YELLOW}Running migrations to update from version $MIGRATION_VERSION to $EXPECTED_VERSION${NC}"
+    if "$PROJECT_ROOT/infrastructure/scripts/db/migrate.sh" "$ENV" up; then
+      NEW_VERSION=$(docker exec epr-postgres psql -U "$DB_USER" -d "$DB_NAME" -t -c \
+        "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1;" 2>/dev/null | xargs || echo "0")
+      echo -e "${GREEN}OK: Database migrations completed (version: $MIGRATION_VERSION -> $NEW_VERSION)${NC}"
+    else
+      echo -e "${RED}ERROR: Database migrations failed - rolling back${NC}"
+      "$PROJECT_ROOT/infrastructure/scripts/ops/rollback.sh" "$ENV"
+      exit 1
+    fi
   fi
 fi
 
