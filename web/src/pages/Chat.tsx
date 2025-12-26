@@ -1156,8 +1156,8 @@ const Chat = () => {
                       }`}
                     >
                       {message.role === "assistant" && (
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shrink-0">
-                          <Bot className="w-4 h-4 text-primary-foreground" />
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shrink-0 p-1">
+                          <img src="/logo_chatbot.png" alt="AI" className="w-full h-full object-contain" />
                         </div>
                       )}
                       <div

@@ -14,7 +14,6 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import logoIcon from "@/assets/logo-icon.png";
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -74,7 +73,7 @@ const Navbar = () => {
           <Link to="/" className="flex items-center gap-3 group">
             <div className="relative">
               <div className="h-12 transform group-hover:scale-105 transition-transform duration-300">
-                <img src={logoIcon} alt="EPR AI" className="h-full w-auto object-contain" />
+                <img src="/logo.png" alt="EPR AI" className="h-full w-auto object-contain" />
               </div>
             </div>
           </Link>
