@@ -333,6 +333,20 @@ func (s *Subscription) ResetTokens(resetCycleDays int) error {
 	return nil
 }
 
+// UpdateTotalTokens updates the total token limit for the subscription
+// This is used when admin changes free account settings
+func (s *Subscription) UpdateTotalTokens(newTokenLimit int) {
+	s.totalTokens = newTokenLimit
+
+	// If remaining tokens exceed new limit, cap it to the new limit
+	// This prevents negative "tokens used" when admin decreases the limit
+	if s.remainingTokens > newTokenLimit {
+		s.remainingTokens = newTokenLimit
+	}
+
+	s.UpdatedAt = time.Now()
+}
+
 func (s *Subscription) Cancel() error {
 	if s.status == StatusCanceled {
 		return domain.ErrInvalidOperation

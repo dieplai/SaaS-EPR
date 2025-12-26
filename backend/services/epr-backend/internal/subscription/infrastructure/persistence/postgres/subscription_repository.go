@@ -126,6 +126,56 @@ func (r *SubscriptionRepository) FindDueForTokenReset(ctx context.Context) ([]*s
 	return subscriptions, nil
 }
 
+func (r *SubscriptionRepository) FindActiveFreeAccounts(ctx context.Context) ([]*subscription.Subscription, error) {
+	var models []SubscriptionModel
+
+	// Find active subscriptions where package_id IS NULL (free accounts)
+	result := r.db.WithContext(ctx).
+		Where("status = ?", "active").
+		Where("package_id IS NULL").
+		Find(&models)
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	subscriptions := make([]*subscription.Subscription, len(models))
+	for i, model := range models {
+		sub, err := r.toDomain(&model)
+		if err != nil {
+			return nil, err
+		}
+		subscriptions[i] = sub
+	}
+
+	return subscriptions, nil
+}
+
+func (r *SubscriptionRepository) FindActiveByPackageID(ctx context.Context, packageID uuid.UUID) ([]*subscription.Subscription, error) {
+	var models []SubscriptionModel
+
+	// Find active subscriptions using specific package
+	result := r.db.WithContext(ctx).
+		Where("status = ?", "active").
+		Where("package_id = ?", packageID).
+		Find(&models)
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	subscriptions := make([]*subscription.Subscription, len(models))
+	for i, model := range models {
+		sub, err := r.toDomain(&model)
+		if err != nil {
+			return nil, err
+		}
+		subscriptions[i] = sub
+	}
+
+	return subscriptions, nil
+}
+
 func (r *SubscriptionRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&SubscriptionModel{}, id).Error
 }

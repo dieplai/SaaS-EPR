@@ -114,7 +114,7 @@ const Account = () => {
   }, [authUser]);
 
   // Computed values from subscription
-  const tokensUsed = (subscription?.total_tokens || 0) - (subscription?.remaining_tokens || 0);
+  const tokensRemaining = subscription?.remaining_tokens || 0;
   const tokensTotal = subscription?.total_tokens || 0;
   const plan = subscription?.package_name || "free";
 
@@ -390,10 +390,10 @@ const Account = () => {
                 
                 <div className="mt-6">
                   <div className="flex justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">{t('account.tokensUsedThisMonth')}</span>
-                    <span className="font-medium text-foreground">{tokensUsed}/{tokensTotal}</span>
+                    <span className="text-muted-foreground">Token còn lại</span>
+                    <span className="font-medium text-foreground">{tokensRemaining}/{tokensTotal}</span>
                   </div>
-                  <Progress value={tokensTotal > 0 ? (tokensUsed / tokensTotal) * 100 : 0} className="h-2" />
+                  <Progress value={tokensTotal > 0 ? (tokensRemaining / tokensTotal) * 100 : 0} className="h-2" />
                 </div>
               </div>
 
@@ -553,11 +553,11 @@ const Account = () => {
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium text-foreground">{t('account.tokensUsed')}</span>
+              <span className="text-sm font-medium text-foreground">Token còn lại</span>
             </div>
-            <span className="text-sm font-semibold text-foreground">{tokensUsed}/{tokensTotal}</span>
+            <span className="text-sm font-semibold text-foreground">{tokensRemaining}/{tokensTotal}</span>
           </div>
-          <Progress value={tokensTotal > 0 ? (tokensUsed / tokensTotal) * 100 : 0} className="h-2 mb-4" />
+          <Progress value={tokensTotal > 0 ? (tokensRemaining / tokensTotal) * 100 : 0} className="h-2 mb-4" />
           
           {/* Reset Countdown */}
           <div className="mb-4">

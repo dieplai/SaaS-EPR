@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Send,
   Bot,
@@ -75,10 +76,10 @@ interface Conversation {
 }
 
 const suggestedQuestions = [
-  "What are the EPR packaging requirements for Germany?",
-  "How do I register with LUCID for VerpackG compliance?",
-  "What are the recycling quotas for plastic in the EU?",
-  "When is the France AGEC reporting deadline?",
+  "EPR là gì và tại sao doanh nghiệp cần tuân thủ?",
+  "Quy định về bao bì nhựa tại Việt Nam như thế nào?",
+  "Làm sao để đăng ký EPR cho sản phẩm của tôi?",
+  "Mức phí EPR cho bao bì nhựa được tính như thế nào?",
 ];
 
 interface PlanPackage {
@@ -90,6 +91,8 @@ interface PlanPackage {
 }
 
 const Chat = () => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -408,6 +411,13 @@ const Chat = () => {
         // onStatus callback - update thinking status
         (status: string, stage: string) => {
           setThinkingStatus(status);
+        },
+        // onTokenUsage callback - refresh subscription when tokens consumed
+        (tokensUsed: number, consumed: boolean) => {
+          if (consumed && tokensUsed > 0) {
+            // Invalidate subscription query to refetch updated token count
+            queryClient.invalidateQueries({ queryKey: ['subscription'] });
+          }
         }
       );
 
@@ -884,8 +894,7 @@ const Chat = () => {
                         isEnterprise ? 'group-hover:border-amber-500/50 group-hover:text-amber-500' : ''
                       } transition-colors`}
                       onClick={() => {
-                        setSelectedPlan(plan);
-                        setPaymentOpen(true);
+                        navigate(`/payment?plan=${plan.id}&period=monthly`);
                       }}
                       disabled={isCurrentPlan}
                     >
@@ -1114,14 +1123,11 @@ const Chat = () => {
               {messages.length === 0 ? (
                 /* Empty State */
                 <div className="flex-1 flex flex-col items-center justify-center text-center min-h-[60vh]">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mb-6">
-                    <Bot className="w-8 h-8 text-primary-foreground" />
-                  </div>
-                  <h1 className="text-2xl font-display font-bold text-foreground mb-2">
-                    How can I help you today?
+                  <h1 className="text-3xl font-display font-bold text-foreground mb-3">
+                    Tôi có thể giúp gì cho bạn?
                   </h1>
-                  <p className="text-muted-foreground max-w-md mb-8">
-                    Ask me anything about EPR regulations and compliance.
+                  <p className="text-muted-foreground max-w-md mb-10">
+                    Hỏi tôi bất cứ điều gì về quy định và tuân thủ EPR
                   </p>
 
                   {/* Suggested Questions */}
@@ -1132,12 +1138,9 @@ const Chat = () => {
                         onClick={() => handleSuggestedQuestion(question)}
                         className="p-4 text-left border border-border rounded-xl hover:bg-muted/50 hover:border-primary/30 transition-colors group"
                       >
-                        <div className="flex items-start gap-3">
-                          <Sparkles className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                          <span className="text-sm text-foreground/80 group-hover:text-foreground transition-colors">
-                            {question}
-                          </span>
-                        </div>
+                        <span className="text-sm text-foreground/80 group-hover:text-foreground transition-colors">
+                          {question}
+                        </span>
                       </button>
                     ))}
                   </div>

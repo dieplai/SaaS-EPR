@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Send, User, Sparkles, Zap, Brain, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "@/hooks/useAuth";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import aiExpert from "@/assets/ai-expert.png";
@@ -12,6 +13,8 @@ gsap.registerPlugin(ScrollTrigger);
 
 const AIDemoSection = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const sectionRef = useRef<HTMLDivElement>(null);
   const [displayedMessages, setDisplayedMessages] = useState<Array<{role: string; message: string}>>([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -188,12 +191,13 @@ const AIDemoSection = () => {
             </div>
 
             <div className="text-center mt-8">
-              <Link to="/chat">
-                <Button className="btn-glow text-primary-foreground px-8 py-6 text-lg">
-                  {t('aiDemo.cta')}
-                  <Sparkles className="ml-2 w-5 h-5" />
-                </Button>
-              </Link>
+              <Button
+                className="btn-glow text-primary-foreground px-8 py-6 text-lg"
+                onClick={() => navigate(isAuthenticated ? '/chat' : '/signup')}
+              >
+                {t('aiDemo.cta')}
+                <Sparkles className="ml-2 w-5 h-5" />
+              </Button>
             </div>
           </div>
         </div>

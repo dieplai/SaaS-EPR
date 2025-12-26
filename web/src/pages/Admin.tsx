@@ -44,9 +44,11 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { adminApiClient, AdminPackage, TokenResetSettings, FreeAccountSettings } from "@/lib/admin-api-client";
 
 const Admin = () => {
+  const { logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<"overview" | "packages" | "settings">("overview");
   const { toast } = useToast();
@@ -319,7 +321,11 @@ const Admin = () => {
                 <p className="text-xs text-muted-foreground">administrator</p>
               </div>
             </div>
-            <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-destructive">
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-muted-foreground hover:text-destructive"
+              onClick={() => logout()}
+            >
               <LogOut className="w-5 h-5 mr-3" />
               Sign Out
             </Button>

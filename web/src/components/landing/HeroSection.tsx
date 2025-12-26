@@ -1,13 +1,16 @@
 import { useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { ArrowRight, Play, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "@/hooks/useAuth";
 import gsap from "gsap";
 import heroBg from "@/assets/hero-bg-new.jpg";
 
 const HeroSection = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const sectionRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const subtitleRef = useRef<HTMLParagraphElement>(null);
@@ -133,21 +136,21 @@ const HeroSection = () => {
             ref={ctaRef}
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
-            <Link to="/signup">
-              <Button className="btn-glow text-primary-foreground border-0 text-lg px-8 py-6 group">
-                {t('hero.cta')}
-                <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </Link>
-            <Link to="/chat">
-              <Button
-                variant="outline"
-                className="btn-glass text-foreground text-lg px-8 py-6 group"
-              >
-                <Play className="mr-2 w-5 h-5" />
-                {t('hero.ctaSecondary')}
-              </Button>
-            </Link>
+            <Button
+              className="btn-glow text-primary-foreground border-0 text-lg px-8 py-6 group"
+              onClick={() => navigate(isAuthenticated ? '/chat' : '/signup')}
+            >
+              {t('hero.cta')}
+              <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </Button>
+            <Button
+              variant="outline"
+              className="btn-glass text-foreground text-lg px-8 py-6 group"
+              onClick={() => navigate(isAuthenticated ? '/chat' : '/signup')}
+            >
+              <Play className="mr-2 w-5 h-5" />
+              {t('hero.ctaSecondary')}
+            </Button>
           </div>
 
           {/* Stats */}

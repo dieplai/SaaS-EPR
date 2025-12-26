@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, Sun, Moon, User, LogOut, Settings } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import logoIcon from "@/assets/logo-icon.png";
 
 const Navbar = () => {
+  const navigate = useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -159,11 +160,12 @@ const Navbar = () => {
                     Login
                   </Button>
                 </Link>
-                <Link to="/signup">
-                  <Button className="btn-glow text-primary-foreground border-0">
-                    Get Started
-                  </Button>
-                </Link>
+                <Button
+                  className="btn-glow text-primary-foreground border-0"
+                  onClick={() => navigate(isAuthenticated ? '/chat' : '/signup')}
+                >
+                  Get Started
+                </Button>
               </>
             )}
           </div>
@@ -240,11 +242,15 @@ const Navbar = () => {
                         Login
                       </Button>
                     </Link>
-                    <Link to="/signup" onClick={() => setIsMobileMenuOpen(false)}>
-                      <Button className="w-full btn-glow text-primary-foreground border-0">
-                        Get Started
-                      </Button>
-                    </Link>
+                    <Button
+                      className="w-full btn-glow text-primary-foreground border-0"
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        navigate(isAuthenticated ? '/chat' : '/signup');
+                      }}
+                    >
+                      Get Started
+                    </Button>
                   </>
                 )}
               </div>

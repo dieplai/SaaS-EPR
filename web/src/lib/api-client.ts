@@ -217,7 +217,8 @@ class ChatbotAPIClient extends APIClient {
     sessionId?: string,
     onChunk?: (chunk: string) => void,
     onComplete?: (response: string, sources: any[]) => void,
-    onStatus?: (status: string, stage: string) => void
+    onStatus?: (status: string, stage: string) => void,
+    onTokenUsage?: (tokensUsed: number, consumed: boolean) => void
   ) {
     // POST /api/v1/chat returns Server-Sent Events (SSE) streaming
     const url = `${this.baseURL}/api/v1/chat`;
@@ -290,6 +291,13 @@ class ChatbotAPIClient extends APIClient {
                 // Call onComplete callback
                 if (onComplete) {
                   onComplete(completeResponse, sources);
+                }
+              } else if (data.type === 'token_usage') {
+                // Call onTokenUsage callback
+                if (onTokenUsage) {
+                  const tokensUsed = data.tokens_used || 0;
+                  const consumed = data.consumed || false;
+                  onTokenUsage(tokensUsed, consumed);
                 }
               }
             } catch (parseError) {

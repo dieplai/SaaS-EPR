@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   Calendar,
   Clock,
@@ -16,6 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import gsap from "gsap";
@@ -198,6 +199,8 @@ const relatedPosts = [
 
 const BlogPost = () => {
   const { slug } = useParams();
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [readingProgress, setReadingProgress] = useState(0);
   const [activeSection, setActiveSection] = useState("");
@@ -546,12 +549,13 @@ const BlogPost = () => {
                   <p className="text-sm text-muted-foreground mb-4">
                     Chat with our AI assistant for instant answers to your compliance questions.
                   </p>
-                  <Link to="/chat">
-                    <Button className="w-full">
-                      Try AI Chatbot
-                      <ChevronRight className="w-4 h-4 ml-2" />
-                    </Button>
-                  </Link>
+                  <Button
+                    className="w-full"
+                    onClick={() => navigate(isAuthenticated ? '/chat' : '/signup')}
+                  >
+                    Try AI Chatbot
+                    <ChevronRight className="w-4 h-4 ml-2" />
+                  </Button>
                 </div>
               </div>
             </aside>

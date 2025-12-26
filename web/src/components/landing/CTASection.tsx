@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { ArrowRight, Sparkles, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "@/hooks/useAuth";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import ctaBg from "@/assets/cta-bg.jpg";
@@ -11,6 +12,8 @@ gsap.registerPlugin(ScrollTrigger);
 
 const CTASection = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const sectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -73,12 +76,13 @@ const CTASection = () => {
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
-                <Link to="/signup">
-                  <Button className="btn-glow text-primary-foreground text-lg px-12 py-7 group shadow-xl shadow-primary/25 hover:shadow-primary/40 transition-shadow">
-                    {t('cta.ctaPrimary')}
-                    <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  </Button>
-                </Link>
+                <Button
+                  className="btn-glow text-primary-foreground text-lg px-12 py-7 group shadow-xl shadow-primary/25 hover:shadow-primary/40 transition-shadow"
+                  onClick={() => navigate(isAuthenticated ? '/chat' : '/signup')}
+                >
+                  {t('cta.ctaPrimary')}
+                  <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </Button>
                 <Link to="/contact">
                   <Button
                     variant="outline"

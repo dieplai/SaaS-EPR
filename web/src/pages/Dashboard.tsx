@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import {
@@ -26,8 +26,10 @@ import { Progress } from "@/components/ui/progress";
 import dashboardPreview from "@/assets/dashboard-preview.png";
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { subscription } = useSubscription();
+  const { isAuthenticated } = useAuth();
 
   const tokensUsed = (subscription?.total_tokens || 0) - (subscription?.remaining_tokens || 0);
   const tokensTotal = subscription?.total_tokens || 0;
@@ -196,11 +198,12 @@ const Dashboard = () => {
                 <Bell className="w-5 h-5" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
               </button>
-              <Link to="/chat">
-                <Button className="btn-glow text-primary-foreground">
-                  Ask AI Advisor
-                </Button>
-              </Link>
+              <Button
+                className="btn-glow text-primary-foreground"
+                onClick={() => navigate(isAuthenticated ? '/chat' : '/signup')}
+              >
+                Ask AI Advisor
+              </Button>
             </div>
           </div>
         </header>

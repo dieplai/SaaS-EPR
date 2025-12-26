@@ -73,7 +73,7 @@ func main() {
 
 	// Subscription handlers
 	createPackageHandler := subscriptioncommand.NewCreatePackageHandler(packageRepo)
-	updatePackageHandler := subscriptioncommand.NewUpdatePackageHandler(packageRepo)
+	updatePackageHandler := subscriptioncommand.NewUpdatePackageHandler(packageRepo, subscriptionRepo)
 	deletePackageHandler := subscriptioncommand.NewDeletePackageHandler(packageRepo)
 	getPackageHandler := subscriptionquery.NewGetPackageHandler(packageRepo)
 	listPackagesHandler := subscriptionquery.NewListPackagesHandler(packageRepo)
@@ -90,7 +90,7 @@ func main() {
 
 	// Free account settings handlers
 	getFreeAccountSettingsHandler := subscriptionquery.NewGetFreeAccountSettingsHandler(systemSettingsRepo)
-	updateFreeAccountSettingsHandler := subscriptioncommand.NewUpdateFreeAccountSettingsHandler(systemSettingsRepo)
+	updateFreeAccountSettingsHandler := subscriptioncommand.NewUpdateFreeAccountSettingsHandler(systemSettingsRepo, subscriptionRepo)
 
 	// SePay client
 	sepayClient := sepay.NewClient(
@@ -109,12 +109,26 @@ func main() {
 	)
 	getPaymentHandler := paymentquery.NewGetPaymentHandler(paymentRepo)
 
+	// Expired subscription handler (for downgrading to free)
+	processExpiredSubscriptionsHandler := subscriptioncommand.NewProcessExpiredSubscriptionsHandler(
+		subscriptionRepo,
+		systemSettingsRepo,
+		createSubscriptionHandler,
+	)
+
 	// Start token reset scheduler
 	tokenResetScheduler := scheduler.NewTokenResetScheduler(processTokenResetsHandler)
 	if err := tokenResetScheduler.Start(); err != nil {
 		log.Fatalf("Failed to start token reset scheduler: %v", err)
 	}
 	defer tokenResetScheduler.Stop()
+
+	// Start expired subscription scheduler
+	expiredSubscriptionScheduler := scheduler.NewExpiredSubscriptionScheduler(processExpiredSubscriptionsHandler)
+	if err := expiredSubscriptionScheduler.Start(); err != nil {
+		log.Fatalf("Failed to start expired subscription scheduler: %v", err)
+	}
+	defer expiredSubscriptionScheduler.Stop()
 
 	// Cookie helper for secure cookie management
 	isProduction := cfg.Server.Env == "production"

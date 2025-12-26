@@ -2,8 +2,10 @@ package command
 
 import (
 	"context"
+	"fmt"
 
 	packagedomain "github.com/epr-legal/epr-backend/internal/subscription/domain/package"
+	"github.com/epr-legal/epr-backend/internal/subscription/domain/subscription"
 	"github.com/google/uuid"
 )
 
@@ -19,18 +21,29 @@ type UpdatePackageCommand struct {
 }
 
 type UpdatePackageHandler struct {
-	repo packagedomain.Repository
+	packageRepo      packagedomain.Repository
+	subscriptionRepo subscription.Repository
 }
 
-func NewUpdatePackageHandler(repo packagedomain.Repository) *UpdatePackageHandler {
-	return &UpdatePackageHandler{repo: repo}
+func NewUpdatePackageHandler(
+	packageRepo packagedomain.Repository,
+	subscriptionRepo subscription.Repository,
+) *UpdatePackageHandler {
+	return &UpdatePackageHandler{
+		packageRepo:      packageRepo,
+		subscriptionRepo: subscriptionRepo,
+	}
 }
 
 func (h *UpdatePackageHandler) Handle(ctx context.Context, cmd UpdatePackageCommand) error {
-	pkg, err := h.repo.FindByID(ctx, cmd.ID)
+	pkg, err := h.packageRepo.FindByID(ctx, cmd.ID)
 	if err != nil {
 		return err
 	}
+
+	// Track if token limit is being updated
+	var tokenLimitUpdated bool
+	var newTokenLimit int
 
 	if cmd.Name != nil || cmd.Description != nil {
 		name := pkg.GetName()
@@ -65,6 +78,8 @@ func (h *UpdatePackageHandler) Handle(ctx context.Context, cmd UpdatePackageComm
 			if err != nil {
 				return err
 			}
+			tokenLimitUpdated = true
+			newTokenLimit = tokenLimit.Value()
 		}
 
 		if cmd.DurationDays != nil {
@@ -89,5 +104,25 @@ func (h *UpdatePackageHandler) Handle(ctx context.Context, cmd UpdatePackageComm
 		}
 	}
 
-	return h.repo.Save(ctx, pkg)
+	// Save package first
+	if err := h.packageRepo.Save(ctx, pkg); err != nil {
+		return err
+	}
+
+	// If token limit was updated, update all active subscriptions using this package
+	if tokenLimitUpdated {
+		subscriptions, err := h.subscriptionRepo.FindActiveByPackageID(ctx, cmd.ID)
+		if err != nil {
+			return fmt.Errorf("failed to find subscriptions for package: %w", err)
+		}
+
+		for _, sub := range subscriptions {
+			sub.UpdateTotalTokens(newTokenLimit)
+			if err := h.subscriptionRepo.Save(ctx, sub); err != nil {
+				return fmt.Errorf("failed to update subscription %s: %w", sub.ID, err)
+			}
+		}
+	}
+
+	return nil
 }
